@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Player Percentile Compare</title>
-  <meta name="description" content="Compare two MLB hitters side by side with percentile bars for every stat.">
+  <meta name="description" content="Compare two MLB hitters or pitchers side by side with customizable percentile bars.">
   <meta property="og:title" content="Player Percentile Compare">
-  <meta property="og:description" content="Compare two MLB hitters side by side with percentile bars for every stat.">
+  <meta property="og:description" content="Compare two MLB hitters or pitchers side by side with customizable percentile bars.">
   <meta property="og:type" content="website">
   <meta name="twitter:card" content="summary">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚾</text></svg>">
@@ -29,6 +29,19 @@
     header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; color: #1a1a1a; }
     header p { font-size: 0.8rem; color: #888; margin-top: 3px; letter-spacing: -0.01em; }
 
+    .tab-bar { display: flex; gap: 0; margin-top: 20px; }
+    .tab-btn {
+      background: none; border: none; border-bottom: 2.5px solid transparent;
+      color: #999; font-family: inherit; font-size: 1rem; font-weight: 500;
+      padding: 10px 24px; cursor: pointer; letter-spacing: -0.01em;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn:hover { color: #555; }
+    .tab-btn.active { color: #1a1a1a; font-weight: 600; border-bottom-color: #1a1a1a; }
+
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
     .card {
       background: #fff;
       border-radius: 16px;
@@ -39,12 +52,8 @@
     }
 
     .field-label {
-      font-size: 11px;
-      font-weight: 500;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #666;
-      margin-bottom: 5px;
+      font-size: 11px; font-weight: 500; text-transform: uppercase;
+      letter-spacing: 0.5px; color: #666; margin-bottom: 5px;
     }
 
     .toolbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
@@ -52,86 +61,52 @@
 
     .select-wrap { position: relative; width: 260px; }
     .select-wrap input {
-      width: 100%;
-      background: #fff;
-      border: 1px solid #d8d5d0;
-      border-radius: 8px;
-      color: #1a1a1a;
-      font-family: inherit;
-      font-size: 0.875rem;
-      padding: 7px 12px;
-      outline: none;
-      cursor: pointer;
-      transition: border-color 0.15s;
+      width: 100%; background: #fff; border: 1px solid #d8d5d0; border-radius: 8px;
+      color: #1a1a1a; font-family: inherit; font-size: 0.875rem; padding: 7px 12px;
+      outline: none; cursor: pointer; transition: border-color 0.15s;
     }
     .select-wrap input:focus { border-color: #999; }
 
     .dropdown-list {
-      display: none;
-      position: absolute;
-      top: calc(100% + 4px);
-      left: 0; right: 0;
-      background: #fff;
-      border: 1px solid #d8d5d0;
-      border-radius: 10px;
-      max-height: 280px;
-      overflow-y: auto;
-      z-index: 100;
-      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+      display: none; position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+      background: #fff; border: 1px solid #d8d5d0; border-radius: 10px;
+      max-height: 280px; overflow-y: auto; z-index: 100; box-shadow: 0 6px 20px rgba(0,0,0,0.12);
     }
     .dropdown-list.open { display: block; }
     .dropdown-item { padding: 8px 12px; font-size: 0.85rem; cursor: pointer; transition: background 0.1s; color: #1a1a1a; }
     .dropdown-item:hover, .dropdown-item.highlighted { background: #f0ede8; }
 
     .year-select {
-      background: #fff;
-      border: 1px solid #d8d5d0;
-      border-radius: 8px;
-      color: #1a1a1a;
-      font-family: inherit;
-      font-size: 0.875rem;
-      padding: 7px 10px;
-      outline: none;
-      cursor: pointer;
-      transition: border-color 0.15s;
+      background: #fff; border: 1px solid #d8d5d0; border-radius: 8px; color: #1a1a1a;
+      font-family: inherit; font-size: 0.875rem; padding: 7px 10px; outline: none;
+      cursor: pointer; transition: border-color 0.15s;
     }
     .year-select:focus { border-color: #999; }
 
-    .swap-btn {
-      background: #fff;
-      border: 1px solid #d8d5d0;
-      border-radius: 8px;
-      color: #555;
-      font-family: inherit;
-      font-size: 0.85rem;
-      padding: 7px 12px;
-      cursor: pointer;
-      transition: border-color 0.15s, color 0.15s;
-      line-height: 1;
+    .btn {
+      background: #fff; border: 1px solid #d8d5d0; border-radius: 8px; color: #555;
+      font-family: inherit; font-size: 0.85rem; padding: 7px 12px; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s, background 0.15s; line-height: 1;
     }
-    .swap-btn:hover { border-color: #999; color: #1a1a1a; }
+    .btn:hover { border-color: #999; color: #1a1a1a; }
+    .btn.active { background: #1a1a1a; border-color: #1a1a1a; color: #fff; }
+    .btn.active:hover { background: #333; }
+    .reset-link {
+      display: none; background: none; border: none; color: #999; font-family: inherit;
+      font-size: 0.8rem; text-decoration: underline; cursor: pointer; padding: 7px 2px;
+    }
+    .reset-link:hover { color: #c44820; }
+    .reset-link.visible { display: inline-block; }
 
     /* Player header cards */
     .player-heads {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      gap: 16px;
-      padding-bottom: 14px;
-      margin-bottom: 10px;
-      border-bottom: 1px solid #ede9e4;
+      display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
+      padding-bottom: 14px; margin-bottom: 10px; border-bottom: 1px solid #ede9e4;
     }
     .player-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
-    .player-head.side-b { align-items: center; }
     .player-photo-wrap {
-      width: 92px; height: 92px;
-      border-radius: 50%;
-      overflow: hidden;
-      background: #ede9e4;
-      border: 3px solid #fff;
-      box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
-      position: relative;
-      flex-shrink: 0;
+      width: 92px; height: 92px; border-radius: 50%; overflow: hidden; background: #ede9e4;
+      border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,0.08); position: relative; flex-shrink: 0;
     }
     .player-photo-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
     .player-name { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
@@ -140,94 +115,78 @@
     .vs-divider { font-size: 0.75rem; font-weight: 700; color: #bbb; letter-spacing: 0.05em; }
 
     /* Stat rows */
-    .stat-section-title {
-      font-size: 0.7rem;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 0.08em;
-      color: #999;
-      margin: 22px 0 8px;
-    }
-    .stat-section-title:first-child { margin-top: 0; }
-    .stat-section-note {
-      text-transform: none;
-      font-weight: 500;
-      letter-spacing: 0;
-      color: #bbb;
-    }
-
     .stat-row {
-      display: grid;
-      grid-template-columns: 56px 1fr 132px 1fr 56px;
-      align-items: center;
-      gap: 10px;
-      padding: 5px 0;
+      display: grid; grid-template-columns: 56px 1fr 132px 1fr 56px;
+      align-items: center; gap: 10px; padding: 5px 0;
     }
-
-    .stat-value {
-      font-size: 0.82rem;
-      font-weight: 700;
-      font-variant-numeric: tabular-nums;
-      color: #1a1a1a;
-    }
+    .stat-value { font-size: 0.82rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #1a1a1a; }
     .stat-value.a { text-align: right; }
     .stat-value.b { text-align: left; }
     .stat-value.dim { color: #bbb; font-weight: 500; }
 
-    .stat-label {
-      text-align: center;
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: #555;
-      letter-spacing: -0.01em;
-      padding: 0 2px;
+    .stat-label-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; }
+    .stat-label { text-align: center; font-size: 0.72rem; font-weight: 600; color: #555; letter-spacing: -0.01em; }
+    .stat-row.editable .stat-label {
+      cursor: pointer; border-bottom: 1px dashed #bbb; padding-bottom: 1px;
     }
+    .stat-row.editable .stat-label:hover { color: #1a1a1a; border-color: #1a1a1a; }
+    .stat-remove {
+      background: #f0ede8; border: none; border-radius: 50%; color: #999;
+      width: 16px; height: 16px; font-size: 11px; line-height: 1; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+      transition: background 0.15s, color 0.15s;
+    }
+    .stat-remove:hover { background: #f3c6bf; color: #a83e2c; }
+
+    .add-stat-btn {
+      display: block; width: 100%; margin-top: 10px; padding: 8px;
+      background: none; border: 1.5px dashed #d8d5d0; border-radius: 8px;
+      color: #999; font-family: inherit; font-size: 0.8rem; cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .add-stat-btn:hover { border-color: #999; color: #1a1a1a; }
 
     .bar-track {
-      position: relative;
-      height: 14px;
-      background: #f0ede8;
-      border-radius: 3px;
-      overflow: hidden;
-      display: flex;
+      position: relative; height: 14px; background: #f0ede8; border-radius: 3px;
+      overflow: hidden; display: flex;
     }
     .bar-track.a { justify-content: flex-end; }
     .bar-track.b { justify-content: flex-start; }
-    .bar-fill {
-      height: 100%;
-      border-radius: 3px;
-      min-width: 2px;
-      transition: width 0.35s ease, background-color 0.35s ease;
+    .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.35s ease, background-color 0.35s ease; }
+
+    /* Metric picker (shared floating panel) */
+    .metric-picker {
+      display: none; position: fixed; background: #fff; border: 1px solid #d8d5d0;
+      border-radius: 10px; box-shadow: 0 6px 20px rgba(0,0,0,0.16); width: 270px;
+      max-height: 380px; flex-direction: column; z-index: 300;
     }
+    .metric-picker input {
+      margin: 8px; padding: 7px 10px; border: 1px solid #d8d5d0; border-radius: 8px;
+      font-family: inherit; font-size: 0.85rem; outline: none;
+    }
+    .metric-picker input:focus { border-color: #999; }
+    .metric-picker-list { overflow-y: auto; padding-bottom: 6px; }
+    .metric-picker-group {
+      padding: 6px 12px 3px; font-size: 0.66rem; font-weight: 700; text-transform: uppercase;
+      letter-spacing: 0.05em; color: #999; background: #f8f5f2; position: sticky; top: 0;
+    }
+    .metric-picker-item { padding: 6px 12px; font-size: 0.85rem; cursor: pointer; color: #1a1a1a; }
+    .metric-picker-item:hover { background: #f0ede8; }
+    .metric-picker-item.selected { font-weight: 700; color: #999; }
 
     /* Loading / error states */
     .state-overlay {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 10px;
-      padding: 60px 20px;
-      color: #999;
-      font-size: 0.85rem;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 60px 20px; color: #999; font-size: 0.85rem;
     }
     .spinner {
-      width: 22px; height: 22px;
-      border: 2.5px solid #ddd;
-      border-top-color: #1a1a1a;
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
+      width: 22px; height: 22px; border: 2.5px solid #ddd; border-top-color: #1a1a1a;
+      border-radius: 50%; animation: spin 0.7s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
     .error-box {
-      background: #fdecea;
-      border: 1px solid #f3c6bf;
-      border-radius: 10px;
-      padding: 14px 16px;
-      color: #a83e2c;
-      font-size: 0.85rem;
-      max-width: 420px;
-      text-align: center;
+      background: #fdecea; border: 1px solid #f3c6bf; border-radius: 10px; padding: 14px 16px;
+      color: #a83e2c; font-size: 0.85rem; max-width: 420px; text-align: center;
     }
 
     footer { text-align: center; padding: 24px 0 8px; font-size: 0.75rem; color: #aaa; }
@@ -243,9 +202,9 @@
       .player-heads { grid-template-columns: 1fr; gap: 12px; }
       .vs-divider { order: 2; }
       .player-head.side-b { order: 3; }
-      .legend-row, .stat-row { grid-template-columns: 44px 1fr 92px 1fr 44px; gap: 6px; }
+      .stat-row { grid-template-columns: 44px 1fr 92px 1fr 44px; gap: 6px; }
       .stat-value { font-size: 0.74rem; }
-      .stat-label { font-size: 0.64rem; }
+      .stat-label { font-size: 0.62rem; }
     }
   </style>
 </head>
@@ -253,164 +212,314 @@
 
 <header>
   <h1>Player Percentile Compare</h1>
-  <p>Side-by-side stat comparison with population percentile bars for MLB hitters</p>
+  <p>Side-by-side stat comparison with customizable percentile bars, powered by FanGraphs</p>
+  <nav class="tab-bar">
+    <button class="tab-btn active" data-tab="hitter">Hitter Compare</button>
+    <button class="tab-btn" data-tab="pitcher">Pitcher Compare</button>
+  </nav>
 </header>
 
 <div class="container">
 
-  <div class="card">
-    <div class="toolbar">
-      <div>
-        <div class="field-label">Player A</div>
-        <div class="select-wrap" id="a-select-wrap">
-          <input type="text" id="a-search" placeholder="Search player…" autocomplete="off">
-          <div class="dropdown-list" id="a-dropdown"></div>
+  <!-- HITTER TAB -->
+  <div id="tab-hitter" class="tab-panel active">
+    <div class="card">
+      <div class="toolbar">
+        <div>
+          <div class="field-label">Player A</div>
+          <div class="select-wrap" id="hit-a-select-wrap">
+            <input type="text" id="hit-a-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="hit-a-dropdown"></div>
+          </div>
         </div>
-      </div>
-      <button class="swap-btn" id="swap-btn" title="Swap players">⇄ Swap</button>
-      <div>
-        <div class="field-label">Player B</div>
-        <div class="select-wrap" id="b-select-wrap">
-          <input type="text" id="b-search" placeholder="Search player…" autocomplete="off">
-          <div class="dropdown-list" id="b-dropdown"></div>
+        <button class="btn" id="hit-swap-btn" title="Swap players">⇄ Swap</button>
+        <div>
+          <div class="field-label">Player B</div>
+          <div class="select-wrap" id="hit-b-select-wrap">
+            <input type="text" id="hit-b-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="hit-b-dropdown"></div>
+          </div>
         </div>
+        <div class="toolbar-spacer"></div>
+        <div>
+          <div class="field-label">Season</div>
+          <select id="hit-year-select" class="year-select"></select>
+        </div>
+        <button class="reset-link" id="hit-reset-btn">Reset to default</button>
+        <button class="btn" id="hit-customize-btn">Customize</button>
       </div>
-      <div class="toolbar-spacer"></div>
-      <div>
-        <div class="field-label">Season</div>
-        <select id="year-select" class="year-select"></select>
-      </div>
-      <div>
-        <div class="field-label">Split</div>
-        <select id="split-select" class="year-select"></select>
+    </div>
+
+    <div id="hit-loading" class="state-overlay">
+      <div class="spinner"></div>
+      <span>Loading data…</span>
+    </div>
+    <div id="hit-error" class="state-overlay" style="display:none">
+      <div class="error-box"><strong>Couldn't load data.</strong><br>The FanGraphs proxy may be temporarily unavailable — try again in a moment.</div>
+    </div>
+
+    <div id="hit-content" style="display:none">
+      <div class="card">
+        <div class="player-heads">
+          <div class="player-head side-a" id="hit-head-a"></div>
+          <div class="vs-divider">VS</div>
+          <div class="player-head side-b" id="hit-head-b"></div>
+        </div>
+        <div id="hit-stats-card"></div>
       </div>
     </div>
   </div>
 
-  <div id="loading" class="state-overlay" style="display:none">
-    <div class="spinner"></div>
-    <span>Loading season data…</span>
-  </div>
-  <div id="error" class="state-overlay" style="display:none">
-    <div class="error-box"><strong>Couldn't load data.</strong><br>The MLB Stats API or Baseball Savant proxy may be temporarily unavailable — try again in a moment.</div>
-  </div>
-
-  <div id="content" style="display:none">
+  <!-- PITCHER TAB -->
+  <div id="tab-pitcher" class="tab-panel">
     <div class="card">
-      <div class="player-heads">
-        <div class="player-head side-a" id="head-a"></div>
-        <div class="vs-divider">VS</div>
-        <div class="player-head side-b" id="head-b"></div>
+      <div class="toolbar">
+        <div>
+          <div class="field-label">Player A</div>
+          <div class="select-wrap" id="pit-a-select-wrap">
+            <input type="text" id="pit-a-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="pit-a-dropdown"></div>
+          </div>
+        </div>
+        <button class="btn" id="pit-swap-btn" title="Swap players">⇄ Swap</button>
+        <div>
+          <div class="field-label">Player B</div>
+          <div class="select-wrap" id="pit-b-select-wrap">
+            <input type="text" id="pit-b-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="pit-b-dropdown"></div>
+          </div>
+        </div>
+        <div class="toolbar-spacer"></div>
+        <div>
+          <div class="field-label">Season</div>
+          <select id="pit-year-select" class="year-select"></select>
+        </div>
+        <button class="reset-link" id="pit-reset-btn">Reset to default</button>
+        <button class="btn" id="pit-customize-btn">Customize</button>
       </div>
-      <div id="stats-card"></div>
+    </div>
+
+    <div id="pit-loading" class="state-overlay">
+      <div class="spinner"></div>
+      <span>Loading data…</span>
+    </div>
+    <div id="pit-error" class="state-overlay" style="display:none">
+      <div class="error-box"><strong>Couldn't load data.</strong><br>The FanGraphs proxy may be temporarily unavailable — try again in a moment.</div>
+    </div>
+
+    <div id="pit-content" style="display:none">
+      <div class="card">
+        <div class="player-heads">
+          <div class="player-head side-a" id="pit-head-a"></div>
+          <div class="vs-divider">VS</div>
+          <div class="player-head side-b" id="pit-head-b"></div>
+        </div>
+        <div id="pit-stats-card"></div>
+      </div>
     </div>
   </div>
 
 </div>
 
 <footer>
-  Data: <a href="https://www.mlb.com/stats" target="_blank" rel="noopener">MLB Stats API</a> &amp;
-  <a href="https://baseballsavant.mlb.com" target="_blank" rel="noopener">Baseball Savant</a>. Percentiles computed against hitters with a plate appearance in the selected window. Statcast &amp; plate discipline reflect the full season.
+  Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against all hitters/pitchers with a plate appearance or batter faced in the selected season.
 </footer>
 
 <script>
 // ─── Constants ───────────────────────────────────────────────────────────────
 const CURRENT_YEAR = 2026;
-const YEARS = Array.from({ length: CURRENT_YEAR - 2014 }, (_, i) => CURRENT_YEAR - i);
-const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
+const YEARS = Array.from({ length: CURRENT_YEAR - 2001 }, (_, i) => CURRENT_YEAR - i);
+const FG_PROXY = 'https://fg-proxy.vercel.app/api/fangraphs';
 
-const DEFAULT_A = 'Aaron Judge';
-const DEFAULT_B = 'Shohei Ohtani';
+const MLB_TEAM_IDS = {
+  ATH:133, PIT:134, SDP:135, SEA:136, SFG:137, STL:138, TBR:139, TEX:140, TOR:141, MIN:142,
+  PHI:143, ATL:144, CHW:145, MIA:146, NYY:147, MIL:158, LAA:108, ARI:109, BAL:110, BOS:111,
+  CHC:112, CIN:113, CLE:114, COL:115, DET:116, HOU:117, KCR:118, LAD:119, WSN:120, NYM:121,
+};
 
-// ─── Stat configuration ──────────────────────────────────────────────────────
-// source: 'standard' (MLB Stats API), 'xstats' / 'statcast' / 'discipline' (Savant leaderboards)
-function fmtRate(v) {
-  if (v == null || isNaN(v)) return null;
-  const s = v.toFixed(3);
-  return v < 0 ? '-' + s.slice(3).replace('-', '') : s.slice(1);
-}
-function fmtPct(v) { return (v == null || isNaN(v)) ? null : v.toFixed(1) + '%'; }
-function fmtInt(v) { return (v == null || isNaN(v)) ? null : String(Math.round(v)); }
-function fmtMph(v) { return (v == null || isNaN(v)) ? null : v.toFixed(1); }
-
-const STAT_GROUPS = [
-  {
-    title: 'Standard',
-    stats: [
-      { key: 'gamesPlayed', label: 'G', source: 'standard', fmt: fmtInt },
-      { key: 'plateAppearances', label: 'PA', source: 'standard', fmt: fmtInt },
-      { key: 'hits', label: 'H', source: 'standard', fmt: fmtInt },
-      { key: 'homeRuns', label: 'HR', source: 'standard', fmt: fmtInt },
-      { key: 'rbi', label: 'RBI', source: 'standard', fmt: fmtInt },
-      { key: 'stolenBases', label: 'SB', source: 'standard', fmt: fmtInt },
-      { key: 'avg', label: 'AVG', source: 'standard', fmt: fmtRate },
-      { key: 'obp', label: 'OBP', source: 'standard', fmt: fmtRate },
-      { key: 'slg', label: 'SLG', source: 'standard', fmt: fmtRate },
-      { key: 'ops', label: 'OPS', source: 'standard', fmt: fmtRate },
-    ],
-  },
-  {
-    title: 'Statcast',
-    stats: [
-      { key: 'est_woba', label: 'xwOBA', source: 'xstats', fmt: fmtRate },
-      { key: 'est_ba', label: 'xBA', source: 'xstats', fmt: fmtRate },
-      { key: 'est_slg', label: 'xSLG', source: 'xstats', fmt: fmtRate },
-      { key: 'avg_hit_speed', label: 'Avg Exit Velo', source: 'statcast', fmt: fmtMph },
-      { key: 'max_hit_speed', label: 'Max Exit Velo', source: 'statcast', fmt: fmtMph },
-      { key: 'brl_percent', label: 'Barrel %', source: 'statcast', fmt: fmtPct },
-      { key: 'ev95percent', label: 'Hard-Hit %', source: 'statcast', fmt: fmtPct },
-      { key: 'anglesweetspotpercent', label: 'Sweet-Spot %', source: 'statcast', fmt: fmtPct },
-    ],
-  },
-  {
-    title: 'Plate Discipline',
-    stats: [
-      { key: 'k_percent', label: 'K %', source: 'discipline', fmt: fmtPct, lowerIsBetter: true },
-      { key: 'bb_percent', label: 'BB %', source: 'discipline', fmt: fmtPct },
-      { key: 'whiff_percent', label: 'Whiff %', source: 'discipline', fmt: fmtPct, lowerIsBetter: true },
-    ],
-  },
+// ─── Stat catalog (mirrors fg-scatter's metric list, trimmed to fields actually
+// populated by the FanGraphs "type=4" leaderboard payload we fetch) ───────────
+const STAT_GROUPS_HITTING = [
+  { group: 'Summary', stats: [
+    { key: 'Age', label: 'Age' }, { key: 'AVG', label: 'AVG' }, { key: 'OBP', label: 'OBP' },
+    { key: 'SLG', label: 'SLG' }, { key: 'OPS', label: 'OPS' }, { key: 'ISO', label: 'ISO' },
+    { key: 'wOBA', label: 'wOBA' }, { key: 'xwOBA', label: 'xwOBA' }, { key: 'xSLG', label: 'xSLG' },
+    { key: 'wRC+', label: 'wRC+' }, { key: 'WAR', label: 'WAR' }, { key: 'RAR', label: 'RAR' },
+    { key: 'Batting', label: 'Batting' }, { key: 'Offense', label: 'Offense' },
+  ]},
+  { group: 'Counting', stats: [
+    { key: 'G', label: 'G' }, { key: 'AB', label: 'AB' }, { key: 'PA', label: 'PA' },
+    { key: 'H', label: 'H' }, { key: '1B', label: '1B' }, { key: '2B', label: '2B' },
+    { key: '3B', label: '3B' }, { key: 'HR', label: 'HR' }, { key: 'R', label: 'R' },
+    { key: 'RBI', label: 'RBI' }, { key: 'BB', label: 'BB' }, { key: 'IBB', label: 'IBB' },
+    { key: 'SO', label: 'SO' }, { key: 'HBP', label: 'HBP' },
+    { key: 'SF', label: 'SF' }, { key: 'SH', label: 'SH' }, { key: 'GDP', label: 'GDP' },
+  ]},
+  { group: 'Rate', stats: [
+    { key: 'BB%', label: 'BB%' }, { key: 'K%', label: 'K%' }, { key: 'BB/K', label: 'BB/K' },
+    { key: 'AVG', label: 'AVG' }, { key: 'BABIP', label: 'BABIP' },
+    { key: 'OBP', label: 'OBP' }, { key: 'SLG', label: 'SLG' }, { key: 'ISO', label: 'ISO' },
+    { key: 'TTO%', label: 'TTO%' },
+  ]},
+  { group: 'Batted Ball', stats: [
+    { key: 'GB/FB', label: 'GB/FB' }, { key: 'GB%', label: 'GB%' }, { key: 'FB%', label: 'FB%' },
+    { key: 'LD%', label: 'LD%' }, { key: 'IFFB%', label: 'IFFB%' }, { key: 'HR/FB', label: 'HR/FB' },
+    { key: 'Pull%', label: 'Pull%' }, { key: 'Cent%', label: 'Cent%' }, { key: 'Oppo%', label: 'Oppo%' },
+    { key: 'Soft%', label: 'Soft%' }, { key: 'Med%', label: 'Med%' }, { key: 'Hard%', label: 'Hard%' },
+  ]},
+  { group: 'Win Probability', stats: [
+    { key: 'WPA', label: 'WPA' }, { key: '-WPA', label: '-WPA' }, { key: '+WPA', label: '+WPA' },
+    { key: 'RE24', label: 'RE24' }, { key: 'Clutch', label: 'Clutch' },
+  ]},
+  { group: 'Plate Discipline', stats: [
+    { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
+    { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
+    { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
+    { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
+    { key: 'SwStr%', label: 'SwStr%' }, { key: 'CStr%', label: 'CStr%' },
+  ]},
+  { group: 'Baserunning', stats: [
+    { key: 'SB', label: 'SB' }, { key: 'CS', label: 'CS' },
+    { key: 'BaseRunning', label: 'BsR' }, { key: 'Spd', label: 'Spd' },
+  ]},
+  { group: 'Batted Ball Quality', stats: [
+    { key: 'EV', label: 'EV' }, { key: 'EV90', label: 'EV90' }, { key: 'LA', label: 'LA' },
+    { key: 'Barrel%', label: 'Barrel/BBE%' }, { key: 'Barrels', label: 'Barrels' },
+    { key: 'HardHit%', label: 'HardHit%' }, { key: 'maxEV', label: 'maxEV' },
+    { key: 'FastSwing%', label: 'Fast Swing%' }, { key: 'Swords', label: 'Swords' },
+    { key: 'AttackAngle', label: 'Attack Angle' },
+  ]},
+  { group: 'Plus Stats', stats: [
+    { key: 'AVG+', label: 'AVG+' }, { key: 'BB%+', label: 'BB%+' }, { key: 'K%+', label: 'K%+' },
+    { key: 'OBP+', label: 'OBP+' }, { key: 'SLG+', label: 'SLG+' },
+    { key: 'ISO+', label: 'ISO+' }, { key: 'BABIP+', label: 'BABIP+' },
+  ]},
 ];
 
-// ─── CSV parsing (handles quoted fields with embedded commas) ──────────────────
-function parseCSV(text) {
-  text = text.replace(/^﻿/, '');
-  const rows = [];
-  let row = [], field = '', inQuotes = false;
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i];
-    if (inQuotes) {
-      if (c === '"') {
-        if (text[i + 1] === '"') { field += '"'; i++; }
-        else inQuotes = false;
-      } else field += c;
-    } else if (c === '"') inQuotes = true;
-    else if (c === ',') { row.push(field); field = ''; }
-    else if (c === '\n' || c === '\r') {
-      if (c === '\r' && text[i + 1] === '\n') i++;
-      row.push(field); field = '';
-      if (row.length > 1 || row[0] !== '') rows.push(row);
-      row = [];
-    } else field += c;
-  }
-  if (field !== '' || row.length) { row.push(field); rows.push(row); }
-  if (!rows.length) return [];
-  const header = rows[0];
-  return rows.slice(1).map(r => {
-    const obj = {};
-    header.forEach((h, i) => { obj[h] = r[i]; });
-    return obj;
-  });
+const STAT_GROUPS_PITCHING = [
+  { group: 'Summary', stats: [
+    { key: 'Age', label: 'Age' }, { key: 'ERA', label: 'ERA' }, { key: 'FIP', label: 'FIP' },
+    { key: 'xFIP', label: 'xFIP' }, { key: 'SIERA', label: 'SIERA' }, { key: 'xERA', label: 'xERA' },
+    { key: 'ERA-', label: 'ERA-' }, { key: 'FIP-', label: 'FIP-' }, { key: 'xFIP-', label: 'xFIP-' },
+    { key: 'WAR', label: 'WAR' }, { key: 'RAR', label: 'RAR' },
+  ]},
+  { group: 'Counting', stats: [
+    { key: 'W', label: 'W' }, { key: 'L', label: 'L' }, { key: 'G', label: 'G' },
+    { key: 'GS', label: 'GS' }, { key: 'CG', label: 'CG' }, { key: 'ShO', label: 'ShO' },
+    { key: 'SV', label: 'SV' }, { key: 'HLD', label: 'HLD' }, { key: 'BS', label: 'BS' },
+    { key: 'IP', label: 'IP' }, { key: 'TBF', label: 'TBF' }, { key: 'H', label: 'H' },
+    { key: 'R', label: 'R' }, { key: 'ER', label: 'ER' }, { key: 'HR', label: 'HR' },
+    { key: 'BB', label: 'BB' }, { key: 'IBB', label: 'IBB' }, { key: 'HBP', label: 'HBP' },
+    { key: 'WP', label: 'WP' }, { key: 'BK', label: 'BK' }, { key: 'SO', label: 'SO' },
+    { key: 'GB', label: 'GB' }, { key: 'FB', label: 'FB' }, { key: 'LD', label: 'LD' },
+    { key: 'IFFB', label: 'IFFB' }, { key: 'Pitches', label: 'Pitches' },
+    { key: 'Balls', label: 'Balls' }, { key: 'Strikes', label: 'Strikes' },
+    { key: 'RS', label: 'RS' }, { key: 'IFH', label: 'IFH' }, { key: 'BU', label: 'BU' },
+    { key: 'BUH', label: 'BUH' }, { key: 'SD', label: 'SD' }, { key: 'MD', label: 'MD' },
+  ]},
+  { group: 'Rate', stats: [
+    { key: 'K/9', label: 'K/9' }, { key: 'BB/9', label: 'BB/9' }, { key: 'K/BB', label: 'K/BB' },
+    { key: 'H/9', label: 'H/9' }, { key: 'HR/9', label: 'HR/9' }, { key: 'K%', label: 'K%' },
+    { key: 'BB%', label: 'BB%' }, { key: 'K-BB%', label: 'K-BB%' }, { key: 'AVG', label: 'AVG' },
+    { key: 'WHIP', label: 'WHIP' }, { key: 'BABIP', label: 'BABIP' }, { key: 'LOB%', label: 'LOB%' },
+    { key: 'HR/FB', label: 'HR/FB' }, { key: 'TTO%', label: 'TTO%' },
+  ]},
+  { group: 'Batted Ball', stats: [
+    { key: 'GB/FB', label: 'GB/FB' }, { key: 'GB%', label: 'GB%' }, { key: 'FB%', label: 'FB%' },
+    { key: 'LD%', label: 'LD%' }, { key: 'IFFB%', label: 'IFFB%' },
+    { key: 'IFH%', label: 'IFH%' }, { key: 'BUH%', label: 'BUH%' },
+  ]},
+  { group: 'Quality of Contact (Against)', stats: [
+    { key: 'Barrel%', label: 'Barrel/BBE%' }, { key: 'Barrels', label: 'Barrels' },
+    { key: 'HardHit%', label: 'HardHit%' }, { key: 'EV', label: 'EV' }, { key: 'maxEV', label: 'maxEV' },
+    { key: 'FastSwing%', label: 'Fast Swing%' }, { key: 'Swords', label: 'Swords' },
+  ]},
+  { group: 'Win Probability', stats: [
+    { key: 'WPA', label: 'WPA' }, { key: '-WPA', label: '-WPA' }, { key: '+WPA', label: '+WPA' },
+  ]},
+  { group: 'Plate Discipline', stats: [
+    { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
+    { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
+    { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
+    { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
+    { key: 'SwStr%', label: 'SwStr%' }, { key: 'CStr%', label: 'CStr%' },
+    { key: 'C+SwStr%', label: 'CSW%' },
+  ]},
+  { group: 'Workload', stats: [
+    { key: 'Starting', label: 'Starting' }, { key: 'Start-IP', label: 'Start-IP' },
+    { key: 'Relieving', label: 'Relieving' }, { key: 'Relief-IP', label: 'Relief-IP' },
+  ]},
+  { group: 'Pitch Usage', stats: [
+    { key: 'pfxFA%', label: 'FA%' }, { key: 'pfxFC%', label: 'FC%' }, { key: 'pfxFS%', label: 'FS%' },
+    { key: 'pfxFO%', label: 'FO%' }, { key: 'pfxSI%', label: 'SI%' }, { key: 'pfxSL%', label: 'SL%' },
+    { key: 'pfxCU%', label: 'CU%' }, { key: 'pfxKC%', label: 'KC%' }, { key: 'pfxEP%', label: 'EP%' },
+    { key: 'pfxCH%', label: 'CH%' }, { key: 'pfxKN%', label: 'KN%' }, { key: 'pfxUN%', label: 'UN%' },
+  ]},
+  { group: 'Pitch Velocity', stats: [
+    { key: 'pfxvFA', label: 'vFA' }, { key: 'pfxvFC', label: 'vFC' }, { key: 'pfxvFS', label: 'vFS' },
+    { key: 'pfxvFO', label: 'vFO' }, { key: 'pfxvSI', label: 'vSI' }, { key: 'pfxvSL', label: 'vSL' },
+    { key: 'pfxvCU', label: 'vCU' }, { key: 'pfxvKC', label: 'vKC' }, { key: 'pfxvEP', label: 'vEP' },
+    { key: 'pfxvCH', label: 'vCH' }, { key: 'pfxvKN', label: 'vKN' },
+  ]},
+  { group: 'Stuff+ / PitchingBot', stats: [
+    { key: 'sp_stuff', label: 'Stuff+' }, { key: 'sp_location', label: 'Location+' },
+    { key: 'sp_pitching', label: 'Pitching+' },
+  ]},
+];
+
+const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OBP','SLG','OPS','HR','RBI','SB','xwOBA','xSLG','EV','Barrel%','HardHit%','K%','BB%'];
+const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','xFIP','WHIP','W','SV','IP','SO','K/9','BB/9','K%','BB%','HardHit%','Barrel%','EV'];
+
+// ─── Formatting (ported from fg-scatter's formatStat/displayVal/lowerIsBetter) ─
+const PCT_KEYS = new Set([
+  'K%','BB%','K-BB%','LOB%','GB%','FB%','HR/FB','SwStr%','IFFB%','LD%',
+  'O-Swing%','Z-Swing%','Swing%','O-Contact%','Z-Contact%','Contact%','Zone%','F-Strike%',
+  'CStr%','C+SwStr%','IFH%','BUH%','TTO%',
+  'pfxFA%','pfxFC%','pfxFS%','pfxFO%','pfxSI%','pfxSL%','pfxCU%','pfxKC%','pfxEP%','pfxCH%','pfxKN%','pfxUN%',
+  'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%',
+  'Barrel%','HardHit%','FastSwing%',
+]);
+const SLASH_KEYS = new Set(['AVG','OBP','SLG','OPS','ISO','wOBA','xwOBA','xSLG','BABIP']);
+const COUNTING_KEYS = new Set([
+  'W','L','G','GS','CG','ShO','SV','HLD','BS','TBF','H','R','ER','HR','BB','IBB','HBP','WP','BK','SO',
+  'GB','FB','LD','IFFB','Pitches','Balls','Strikes','RS','IFH','BU','BUH','SD','MD',
+  'AB','PA','1B','2B','3B','RBI','SF','SH','GDP','SB','CS','Swords','Barrels',
+]);
+const LOWER_IS_BETTER_ALWAYS = new Set(['ERA','FIP','xFIP','SIERA','xERA','WHIP','H/9','BB/9','HR/9','ERA-','FIP-','xFIP-','L','BS','-WPA']);
+const LOWER_IS_BETTER_PITCHING = new Set(['BB%','BABIP','HBP','HR/FB','wOBA','SLG','xwOBA','xSLG','Barrel%','Barrels','HardHit%','EV','maxEV']);
+const LOWER_IS_BETTER_HITTING = new Set(['K%','GDP','CS','SwStr%']);
+
+function lowerIsBetter(key, mode) {
+  if (LOWER_IS_BETTER_ALWAYS.has(key)) return true;
+  if (mode === 'pit' && LOWER_IS_BETTER_PITCHING.has(key)) return true;
+  if (mode === 'bat' && LOWER_IS_BETTER_HITTING.has(key)) return true;
+  return false;
 }
 
-function num(v) {
-  if (v == null || v === '') return null;
-  const n = parseFloat(v);
-  return isNaN(n) ? null : n;
+// Convert a raw FanGraphs value for ranking/display: null counting stats -> 0.
+function rawValue(v, key) {
+  if (v == null) return COUNTING_KEYS.has(key) ? 0 : null;
+  return v;
+}
+
+function formatStat(v, key) {
+  if (v == null || isNaN(v)) return null;
+  if (SLASH_KEYS.has(key)) {
+    const s = v.toFixed(3);
+    return v < 0 ? '-' + s.slice(3).replace('-', '') : s.slice(1);
+  }
+  if (PCT_KEYS.has(key)) return (v * 100).toFixed(1) + '%';
+  if (['ERA','FIP','xFIP','SIERA','xERA','WHIP','HR/9','BB/9','K/9','H/9','K/BB','GB/FB','Spd','BB/K'].includes(key)) return v.toFixed(2);
+  if (['WAR','IP','Start-IP','Relief-IP','WPA','-WPA','+WPA','Starting','Relieving','RAR','Batting','Offense',
+       'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle'].includes(key)) return v.toFixed(1);
+  if (['ERA-','FIP-','xFIP-','sp_stuff','sp_location','sp_pitching','wRC+','AVG+','BB%+','K%+','OBP+','SLG+','ISO+','BABIP+'].includes(key)) return String(Math.round(v));
+  if (key.startsWith('pfxv')) return v.toFixed(1);
+  if (key === 'Age') return String(Math.round(v));
+  if (COUNTING_KEYS.has(key)) return String(Math.round(v));
+  return Number.isInteger(v) ? String(v) : v.toFixed(2);
 }
 
 // ─── Percentile computation ─────────────────────────────────────────────────
-// entries: [{id, value}] -> Map<id, percentile 0-100>
 function computePercentiles(entries) {
   const valid = entries.filter(e => e.value != null && !isNaN(e.value));
   const sorted = valid.slice().sort((a, b) => a.value - b.value);
@@ -428,200 +537,8 @@ function computePercentiles(entries) {
   return map;
 }
 
-// ─── Data loading ────────────────────────────────────────────────────────────
-async function fetchJSON(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('Fetch failed: ' + url);
-  return r.json();
-}
-async function fetchCSV(url) {
-  const r = await fetch(url);
-  if (!r.ok) throw new Error('Fetch failed: ' + url);
-  return parseCSV(await r.text());
-}
-
-// ─── Splits ──────────────────────────────────────────────────────────────────
-const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-
-function getSplitOptions(year) {
-  const now = new Date();
-  const isCurrentYear = year === now.getUTCFullYear();
-  const opts = [{ key: 'season', label: 'Full Season' }];
-  if (isCurrentYear) {
-    opts.push({ key: 'last7', label: 'Last 7 Days', days: 7 });
-    opts.push({ key: 'last15', label: 'Last 15 Days', days: 15 });
-    opts.push({ key: 'last30', label: 'Last 30 Days', days: 30 });
-  }
-  const lastMonth = isCurrentYear ? now.getUTCMonth() : 9; // March(2)..October(9) for completed seasons
-  for (let m = 2; m <= lastMonth; m++) opts.push({ key: `month${m}`, label: MONTH_NAMES[m], month: m });
-  return opts;
-}
-
-function splitDateRange(year, split) {
-  if (!split || split.key === 'season') return null;
-  if (split.days) {
-    const end = new Date();
-    const start = new Date(end.getTime() - split.days * 86400000);
-    return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
-  }
-  if (split.month != null) {
-    const start = new Date(Date.UTC(year, split.month, 1));
-    let end = new Date(Date.UTC(year, split.month + 1, 0));
-    const now = new Date();
-    if (year === now.getUTCFullYear() && split.month === now.getUTCMonth()) end = now;
-    return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
-  }
-  return null;
-}
-
-function standardStatsUrl(year, dateRange) {
-  const base = `https://statsapi.mlb.com/api/v1/stats?group=hitting&season=${year}&sportId=1&limit=3000&playerPool=all`;
-  return dateRange
-    ? `${base}&stats=byDateRange&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`
-    : `${base}&stats=season`;
-}
-
-// ─── Data loading ────────────────────────────────────────────────────────────
-// Identity (name/team/position) always reflects the full season roster, so the
-// search dropdown and player card stay populated even for a narrow split.
-const identityCache = new Map();      // year -> Map<id, identity>
-const standardSplitCache = new Map(); // `${year}:${splitKey}` -> { valuesById, percentiles }
-const extrasCache = new Map();        // year -> { xstatsById, statcastById, disciplineById, percentiles }
-
-async function loadIdentity(year) {
-  if (identityCache.has(year)) return identityCache.get(year);
-  const json = await fetchJSON(standardStatsUrl(year, null));
-  const splits = (json.stats && json.stats[0] && json.stats[0].splits) || [];
-  const map = new Map();
-  for (const s of splits) {
-    map.set(s.player.id, {
-      id: s.player.id,
-      name: s.player.fullName,
-      teamId: s.team ? s.team.id : null,
-      teamName: s.team ? s.team.name : '',
-      position: s.position ? s.position.abbreviation : '',
-    });
-  }
-  identityCache.set(year, map);
-  return map;
-}
-
-async function loadStandardSplit(year, split) {
-  const cacheKey = `${year}:${split.key}`;
-  if (standardSplitCache.has(cacheKey)) return standardSplitCache.get(cacheKey);
-  const dateRange = splitDateRange(year, split);
-  const json = await fetchJSON(standardStatsUrl(year, dateRange));
-  const splitsArr = (json.stats && json.stats[0] && json.stats[0].splits) || [];
-  const valuesById = new Map();
-  for (const s of splitsArr) {
-    const st = s.stat;
-    valuesById.set(s.player.id, {
-      gamesPlayed: num(st.gamesPlayed),
-      plateAppearances: num(st.plateAppearances),
-      hits: num(st.hits),
-      homeRuns: num(st.homeRuns),
-      rbi: num(st.rbi),
-      stolenBases: num(st.stolenBases),
-      avg: num(st.avg),
-      obp: num(st.obp),
-      slg: num(st.slg),
-      ops: num(st.ops),
-    });
-  }
-  const standardStats = STAT_GROUPS.find(g => g.title === 'Standard').stats;
-  const percentiles = new Map();
-  for (const stat of standardStats) {
-    const entries = [];
-    for (const [id, v] of valuesById) {
-      if (v[stat.key] != null) entries.push({ id, value: v[stat.key] });
-    }
-    percentiles.set(stat.key, computePercentiles(entries));
-  }
-  const result = { valuesById, percentiles };
-  standardSplitCache.set(cacheKey, result);
-  return result;
-}
-
-async function loadExtras(year) {
-  if (extrasCache.has(year)) return extrasCache.get(year);
-  const xstatsUrl = `${SAVANT_PROXY}?path=/leaderboard/expected_statistics&type=batter&year=${year}&min=1&csv=true`;
-  const statcastUrl = `${SAVANT_PROXY}?path=/leaderboard/statcast&type=batter&year=${year}&min=1&csv=true`;
-  const disciplineUrl = `${SAVANT_PROXY}?path=/leaderboard/custom&type=batter&year=${year}&filter=&min=1&selections=pa,k_percent,bb_percent,whiff_percent&chart=false&x=pa&y=pa&r=no&chartType=beeswarm&csv=true`;
-
-  const [xstatsRows, statcastRows, disciplineRows] = await Promise.all([
-    fetchCSV(xstatsUrl).catch(() => []),
-    fetchCSV(statcastUrl).catch(() => []),
-    fetchCSV(disciplineUrl).catch(() => []),
-  ]);
-
-  const xstatsById = new Map(), statcastById = new Map(), disciplineById = new Map();
-  for (const row of xstatsRows) {
-    xstatsById.set(parseInt(row.player_id, 10), { est_woba: num(row.est_woba), est_ba: num(row.est_ba), est_slg: num(row.est_slg) });
-  }
-  for (const row of statcastRows) {
-    statcastById.set(parseInt(row.player_id, 10), {
-      avg_hit_speed: num(row.avg_hit_speed),
-      max_hit_speed: num(row.max_hit_speed),
-      brl_percent: num(row.brl_percent),
-      ev95percent: num(row.ev95percent),
-      anglesweetspotpercent: num(row.anglesweetspotpercent),
-    });
-  }
-  for (const row of disciplineRows) {
-    disciplineById.set(parseInt(row.player_id, 10), {
-      k_percent: num(row.k_percent),
-      bb_percent: num(row.bb_percent),
-      whiff_percent: num(row.whiff_percent),
-    });
-  }
-
-  const byIdMaps = { xstats: xstatsById, statcast: statcastById, discipline: disciplineById };
-  const percentiles = new Map();
-  for (const group of STAT_GROUPS) {
-    if (group.title === 'Standard') continue;
-    for (const stat of group.stats) {
-      const map = byIdMaps[stat.source];
-      const entries = [];
-      for (const [id, v] of map) {
-        if (v[stat.key] != null) entries.push({ id, value: v[stat.key] });
-      }
-      percentiles.set(stat.key, computePercentiles(entries));
-    }
-  }
-
-  const result = { xstatsById, statcastById, disciplineById, percentiles };
-  extrasCache.set(year, result);
-  return result;
-}
-
-async function loadCombined(year, split) {
-  const [identity, standardSplit, extras] = await Promise.all([
-    loadIdentity(year),
-    loadStandardSplit(year, split),
-    loadExtras(year),
-  ]);
-  const players = new Map();
-  for (const [id, idn] of identity) {
-    players.set(id, {
-      id,
-      name: idn.name,
-      teamId: idn.teamId,
-      teamName: idn.teamName,
-      position: idn.position,
-      standard: standardSplit.valuesById.get(id) || {},
-      xstats: extras.xstatsById.get(id) || {},
-      statcast: extras.statcastById.get(id) || {},
-      discipline: extras.disciplineById.get(id) || {},
-    });
-  }
-  const percentiles = new Map([...standardSplit.percentiles, ...extras.percentiles]);
-  return { players, percentiles, isSplit: split.key !== 'season' };
-}
-
-// ─── Color scale (pale -> deep red as percentile rises) ────────────────────
 function percentileColor(pct) {
   const t = Math.max(0, Math.min(1, pct / 100));
-  // pale cream (#f4ede7) -> deep red (#c0392b), through a mid pink
   const stops = [
     { p: 0, c: [244, 237, 231] },
     { p: 0.5, c: [237, 170, 155] },
@@ -637,7 +554,55 @@ function percentileColor(pct) {
   return `rgb(${rgb.join(',')})`;
 }
 
-// ─── Searchable dropdown (mirrors fg-war pattern) ───────────────────────────
+// ─── Data loading ────────────────────────────────────────────────────────────
+const leaderboardCache = new Map(); // `${year}:${statType}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
+
+async function loadLeaderboard(year, statType, statGroups) {
+  const cacheKey = `${year}:${statType}`;
+  if (leaderboardCache.has(cacheKey)) return leaderboardCache.get(cacheKey);
+
+  const params = new URLSearchParams({
+    pos: 'all', stats: statType, lg: 'all', qual: '0', type: '4',
+    season: String(year), season1: String(year), month: '0', ind: '0', hand: '', team: '0',
+    pageitems: '10000', pagenum: '1', sortstat: 'WAR', sortdir: 'default',
+  });
+  const resp = await fetch(`${FG_PROXY}?${params}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  const json = await resp.json();
+  if (json.error) throw new Error(json.error);
+  const rows = json.data || [];
+
+  const players = new Map();
+  for (const row of rows) {
+    if (row.playerid == null) continue;
+    players.set(row.playerid, {
+      id: row.playerid,
+      mlbId: row.xMLBAMID || null,
+      name: row.PlayerName,
+      teamAbb: row.TeamNameAbb,
+      teamId: MLB_TEAM_IDS[row.TeamNameAbb] || null,
+      position: row.position || '',
+      raw: row,
+    });
+  }
+
+  const allKeys = new Set(statGroups.flatMap(g => g.stats.map(s => s.key)));
+  const percentiles = new Map();
+  for (const key of allKeys) {
+    const entries = [];
+    for (const p of players.values()) {
+      const v = rawValue(p.raw[key], key);
+      if (v != null && !isNaN(v)) entries.push({ id: p.id, value: v });
+    }
+    percentiles.set(key, computePercentiles(entries));
+  }
+
+  const result = { players, percentiles };
+  leaderboardCache.set(cacheKey, result);
+  return result;
+}
+
+// ─── Searchable dropdown (player search) ────────────────────────────────────
 function deaccent(str) { return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
 
 function buildDropdown(inputEl, dropdownEl, onSelect, getPlayers) {
@@ -647,18 +612,17 @@ function buildDropdown(inputEl, dropdownEl, onSelect, getPlayers) {
   function sortedByLastName(arr) {
     return [...arr].sort((a, b) => a.name.split(' ').pop().localeCompare(b.name.split(' ').pop()));
   }
-
   function render(list) {
     filtered = list;
     highlighted = -1;
     dropdownEl.innerHTML = list.length
-      ? list.map((p, i) => `<div class="dropdown-item" data-i="${i}">${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}</div>`).join('')
+      ? list.map((p, i) => `<div class="dropdown-item" data-i="${i}">${p.name}${p.teamAbb ? ' (' + p.teamAbb + ')' : ''}</div>`).join('')
       : '<div class="dropdown-item" style="color:#aaa;cursor:default">No results</div>';
     dropdownEl.classList.add('open');
   }
   function close() { dropdownEl.classList.remove('open'); highlighted = -1; }
   function pick(p) {
-    inputEl.value = `${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}`;
+    inputEl.value = `${p.name}${p.teamAbb ? ' (' + p.teamAbb + ')' : ''}`;
     close();
     onSelect(p);
   }
@@ -694,157 +658,303 @@ function buildDropdown(inputEl, dropdownEl, onSelect, getPlayers) {
     if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) close();
   });
 
-  return { setValueSilently: (p) => { inputEl.value = `${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}`; } };
+  return { setValueSilently: (p) => { inputEl.value = `${p.name}${p.teamAbb ? ' (' + p.teamAbb + ')' : ''}`; } };
 }
 
-// ─── Rendering ───────────────────────────────────────────────────────────────
-function headshotUrl(id) {
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${id}/headshot/67/current`;
+// ─── Metric picker (shared floating panel for Customize mode) ──────────────
+let pickerEl = null;
+function ensurePicker() {
+  if (pickerEl) return pickerEl;
+  pickerEl = document.createElement('div');
+  pickerEl.className = 'metric-picker';
+  pickerEl.innerHTML = `<input type="text" placeholder="Search metric…" autocomplete="off"><div class="metric-picker-list"></div>`;
+  document.body.appendChild(pickerEl);
+  return pickerEl;
+}
+function closePicker() {
+  if (pickerEl) pickerEl.style.display = 'none';
+  document.removeEventListener('mousedown', onPickerOutsideClick, true);
+}
+function onPickerOutsideClick(e) {
+  if (pickerEl && pickerEl.style.display !== 'none' && !pickerEl.contains(e.target)) closePicker();
+}
+function openMetricPicker(anchorEl, statGroups, currentKeys, onPick) {
+  const panel = ensurePicker();
+  panel.style.display = 'flex';
+  const rect = anchorEl.getBoundingClientRect();
+  const top = Math.min(rect.bottom + 6, window.innerHeight - 300);
+  const left = Math.max(8, Math.min(rect.left - 100, window.innerWidth - 280));
+  panel.style.top = `${top}px`;
+  panel.style.left = `${left}px`;
+
+  const input = panel.querySelector('input');
+  const list = panel.querySelector('.metric-picker-list');
+  input.value = '';
+
+  function renderList(filterText) {
+    const q = filterText.trim().toLowerCase();
+    let html = '';
+    for (const g of statGroups) {
+      const items = g.stats.filter(s => !q || s.label.toLowerCase().includes(q) || s.key.toLowerCase().includes(q));
+      if (!items.length) continue;
+      html += `<div class="metric-picker-group">${g.group}</div>`;
+      for (const s of items) {
+        const isSelected = currentKeys.includes(s.key);
+        html += `<div class="metric-picker-item${isSelected ? ' selected' : ''}" data-key="${s.key}">${s.label}${isSelected ? ' ✓' : ''}</div>`;
+      }
+    }
+    list.innerHTML = html || '<div class="metric-picker-item" style="color:#aaa;cursor:default">No matches</div>';
+  }
+  renderList('');
+  input.oninput = () => renderList(input.value);
+  list.onclick = (e) => {
+    const item = e.target.closest('.metric-picker-item[data-key]');
+    if (!item) return;
+    onPick(item.dataset.key);
+    closePicker();
+  };
+  setTimeout(() => { input.focus(); document.addEventListener('mousedown', onPickerOutsideClick, true); }, 0);
+}
+
+// ─── Player head rendering ───────────────────────────────────────────────────
+function headshotUrl(mlbId) {
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${mlbId}/headshot/67/current`;
 }
 function teamLogoUrl(teamId) { return `https://www.mlbstatic.com/team-logos/${teamId}.svg`; }
 
 function renderPlayerHead(el, p) {
   el.innerHTML = `
     <div class="player-photo-wrap">
-      <img src="${headshotUrl(p.id)}" alt="${p.name}" onerror="this.style.display='none'">
+      ${p.mlbId ? `<img src="${headshotUrl(p.mlbId)}" alt="${p.name}" onerror="this.style.display='none'">` : ''}
     </div>
     <div class="player-name">${p.name}</div>
     <div class="player-meta">
       ${p.teamId ? `<img class="team-logo" src="${teamLogoUrl(p.teamId)}" onerror="this.style.display='none'">` : ''}
-      <span>${p.position || ''}${p.position && p.teamName ? ' · ' : ''}${p.teamName || ''}</span>
+      <span>${p.position || ''}${p.position && p.teamAbb ? ' · ' : ''}${p.teamAbb || ''}</span>
     </div>`;
 }
 
-function renderStats(combined, playerA, playerB) {
-  const card = document.getElementById('stats-card');
-  let html = '';
+// ─── Tab controller factory ─────────────────────────────────────────────────
+function createCompareTab(cfg) {
+  const el = id => document.getElementById(id);
+  const aInput = el(cfg.ids.aInput), aDropdownEl = el(cfg.ids.aDropdown);
+  const bInput = el(cfg.ids.bInput), bDropdownEl = el(cfg.ids.bDropdown);
+  const yearSelect = el(cfg.ids.yearSelect);
+  const customizeBtn = el(cfg.ids.customizeBtn);
+  const resetBtn = el(cfg.ids.resetBtn);
+  const headA = el(cfg.ids.headA), headB = el(cfg.ids.headB);
+  const statsCard = el(cfg.ids.statsCard);
+  const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
 
-  for (const group of STAT_GROUPS) {
-    const note = (combined.isSplit && group.title !== 'Standard') ? ' <span class="stat-section-note">· full season</span>' : '';
-    html += `<div class="stat-section-title">${group.title}${note}</div>`;
-    for (const stat of group.stats) {
-      const va = playerA[stat.source][stat.key];
-      const vb = playerB[stat.source][stat.key];
-      const pctMapRaw = combined.percentiles.get(stat.key);
-      let pctA = pctMapRaw.has(playerA.id) ? pctMapRaw.get(playerA.id) : null;
-      let pctB = pctMapRaw.has(playerB.id) ? pctMapRaw.get(playerB.id) : null;
-      if (stat.lowerIsBetter) {
+  function loadStatKeys() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(cfg.storageKey));
+      if (Array.isArray(saved) && saved.length) return saved;
+    } catch {}
+    return [...cfg.defaultKeys];
+  }
+  function saveStatKeys() { localStorage.setItem(cfg.storageKey, JSON.stringify(state.statKeys)); }
+
+  const state = { year: CURRENT_YEAR, playerA: null, playerB: null, statKeys: loadStatKeys(), customizing: false };
+  let current = null; // { lb, pA, pB }
+
+  function statMeta(key) {
+    for (const g of cfg.statGroups) {
+      const s = g.stats.find(s => s.key === key);
+      if (s) return s;
+    }
+    return { key, label: key };
+  }
+
+  function setLoading(isLoading, isError) {
+    loadingEl.style.display = isLoading ? 'flex' : 'none';
+    errorEl.style.display = isError ? 'flex' : 'none';
+    contentEl.style.display = (!isLoading && !isError) ? 'block' : 'none';
+  }
+
+  function getPlayersForYear() {
+    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
+    return lb ? [...lb.players.values()] : [];
+  }
+
+  async function render() {
+    setLoading(true, false);
+    try {
+      const lb = await loadLeaderboard(state.year, cfg.statType, cfg.statGroups);
+      let pA = state.playerA ? lb.players.get(state.playerA) : null;
+      let pB = state.playerB ? lb.players.get(state.playerB) : null;
+      if (!pA || !pB) {
+        const list = [...lb.players.values()];
+        const findByName = (name) => list.find(p => p.name === name);
+        pA = pA || findByName(cfg.defaultA) || list[0];
+        pB = pB || findByName(cfg.defaultB) || list[1] || list[0];
+        state.playerA = pA.id;
+        state.playerB = pB.id;
+        aDropdown.setValueSilently(pA);
+        bDropdown.setValueSilently(pB);
+      }
+      current = { lb, pA, pB };
+      renderPlayerHead(headA, pA);
+      renderPlayerHead(headB, pB);
+      renderStatsOnly();
+      setLoading(false, false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false, true);
+    }
+  }
+
+  function renderStatsOnly() {
+    if (!current) return;
+    const { lb, pA, pB } = current;
+    let html = '';
+    for (const key of state.statKeys) {
+      const meta = statMeta(key);
+      const va = rawValue(pA.raw[meta.key], meta.key);
+      const vb = rawValue(pB.raw[meta.key], meta.key);
+      const pctMap = lb.percentiles.get(meta.key);
+      let pctA = pctMap && pctMap.has(pA.id) ? pctMap.get(pA.id) : null;
+      let pctB = pctMap && pctMap.has(pB.id) ? pctMap.get(pB.id) : null;
+      if (lowerIsBetter(meta.key, cfg.statType)) {
         if (pctA != null) pctA = 100 - pctA;
         if (pctB != null) pctB = 100 - pctB;
       }
-      const fa = stat.fmt(va);
-      const fb = stat.fmt(vb);
+      const fa = formatStat(va, meta.key);
+      const fb = formatStat(vb, meta.key);
       const colorA = pctA != null ? percentileColor(pctA) : '#e8e4de';
       const colorB = pctB != null ? percentileColor(pctB) : '#e8e4de';
       const widthA = pctA != null ? Math.max(pctA, 3) : 0;
       const widthB = pctB != null ? Math.max(pctB, 3) : 0;
 
       html += `
-        <div class="stat-row">
+        <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
           <div class="bar-track a"><div class="bar-fill" style="width:${widthA}%;background:${colorA}"></div></div>
-          <div class="stat-label">${stat.label}</div>
+          <div class="stat-label-wrap">
+            <span class="stat-label" data-action="pick">${meta.label}</span>
+            ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
+          </div>
           <div class="bar-track b"><div class="bar-fill" style="width:${widthB}%;background:${colorB}"></div></div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
-  }
-
-  card.innerHTML = html;
-}
-
-// ─── App state & wiring ──────────────────────────────────────────────────────
-let state = { year: CURRENT_YEAR, splitKey: 'season', playerA: null, playerB: null };
-
-function getCurrentSplit() {
-  return getSplitOptions(state.year).find(s => s.key === state.splitKey) || { key: 'season', label: 'Full Season' };
-}
-
-function setLoading(isLoading, isError) {
-  document.getElementById('loading').style.display = isLoading ? 'flex' : 'none';
-  document.getElementById('error').style.display = isError ? 'flex' : 'none';
-  document.getElementById('content').style.display = (!isLoading && !isError) ? 'block' : 'none';
-}
-
-async function render() {
-  setLoading(true, false);
-  try {
-    const combined = await loadCombined(state.year, getCurrentSplit());
-    let pA = state.playerA ? combined.players.get(state.playerA) : null;
-    let pB = state.playerB ? combined.players.get(state.playerB) : null;
-
-    if (!pA || !pB) {
-      const list = [...combined.players.values()];
-      const findByName = (name) => list.find(p => p.name === name);
-      pA = pA || findByName(DEFAULT_A) || list[0];
-      pB = pB || findByName(DEFAULT_B) || list[1] || list[0];
-      state.playerA = pA.id;
-      state.playerB = pB.id;
-      aDropdown.setValueSilently(pA);
-      bDropdown.setValueSilently(pB);
+    if (state.customizing) {
+      html += `<button class="add-stat-btn" id="${cfg.ids.addBtn}">+ Add metric</button>`;
     }
-
-    renderPlayerHead(document.getElementById('head-a'), pA);
-    renderPlayerHead(document.getElementById('head-b'), pB);
-    renderStats(combined, pA, pB);
-    setLoading(false, false);
-  } catch (err) {
-    console.error(err);
-    setLoading(false, true);
+    statsCard.innerHTML = html;
+    if (state.customizing) wireEditableRows();
   }
-}
 
-function getPlayersForYear() {
-  const identity = identityCache.get(state.year);
-  return identity ? [...identity.values()] : [];
-}
-
-const aInput = document.getElementById('a-search');
-const aDropdownEl = document.getElementById('a-dropdown');
-const bInput = document.getElementById('b-search');
-const bDropdownEl = document.getElementById('b-dropdown');
-
-const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; render(); }, getPlayersForYear);
-const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; render(); }, getPlayersForYear);
-
-document.getElementById('swap-btn').addEventListener('click', () => {
-  [state.playerA, state.playerB] = [state.playerB, state.playerA];
-  const identity = identityCache.get(state.year);
-  if (identity) {
-    aDropdown.setValueSilently(identity.get(state.playerA));
-    bDropdown.setValueSilently(identity.get(state.playerB));
+  function wireEditableRows() {
+    statsCard.querySelectorAll('.stat-row').forEach(row => {
+      const key = row.dataset.key;
+      row.querySelector('[data-action="remove"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.statKeys.length <= 1) return;
+        state.statKeys = state.statKeys.filter(k => k !== key);
+        saveStatKeys();
+        renderStatsOnly();
+      });
+      row.querySelector('[data-action="pick"]')?.addEventListener('click', (e) => {
+        openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
+          const idx = state.statKeys.indexOf(key);
+          if (idx >= 0) state.statKeys[idx] = newKey;
+          saveStatKeys();
+          renderStatsOnly();
+        });
+      });
+    });
+    const addBtn = document.getElementById(cfg.ids.addBtn);
+    addBtn?.addEventListener('click', (e) => {
+      openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
+        state.statKeys.push(newKey);
+        saveStatKeys();
+        renderStatsOnly();
+      });
+    });
   }
+
+  customizeBtn.addEventListener('click', () => {
+    state.customizing = !state.customizing;
+    customizeBtn.textContent = state.customizing ? 'Done' : 'Customize';
+    customizeBtn.classList.toggle('active', state.customizing);
+    resetBtn.classList.toggle('visible', state.customizing);
+    renderStatsOnly();
+  });
+  resetBtn.addEventListener('click', () => {
+    state.statKeys = [...cfg.defaultKeys];
+    saveStatKeys();
+    renderStatsOnly();
+  });
+
+  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; render(); }, getPlayersForYear);
+  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; render(); }, getPlayersForYear);
+
+  el(cfg.ids.swapBtn).addEventListener('click', () => {
+    [state.playerA, state.playerB] = [state.playerB, state.playerA];
+    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
+    if (lb) {
+      aDropdown.setValueSilently(lb.players.get(state.playerA));
+      bDropdown.setValueSilently(lb.players.get(state.playerB));
+    }
+    render();
+  });
+
+  yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
+  yearSelect.value = String(CURRENT_YEAR);
+  yearSelect.addEventListener('change', () => {
+    state.year = parseInt(yearSelect.value, 10);
+    state.playerA = null;
+    state.playerB = null;
+    render();
+  });
+
   render();
-});
-
-const yearSelect = document.getElementById('year-select');
-yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
-yearSelect.value = String(CURRENT_YEAR);
-
-const splitSelect = document.getElementById('split-select');
-function populateSplitSelect() {
-  const opts = getSplitOptions(state.year);
-  const prevKey = state.splitKey;
-  splitSelect.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
-  state.splitKey = opts.some(o => o.key === prevKey) ? prevKey : 'season';
-  splitSelect.value = state.splitKey;
 }
 
-yearSelect.addEventListener('change', () => {
-  state.year = parseInt(yearSelect.value, 10);
-  state.playerA = null;
-  state.playerB = null;
-  populateSplitSelect();
-  render();
+createCompareTab({
+  statType: 'bat',
+  statGroups: STAT_GROUPS_HITTING,
+  defaultKeys: DEFAULT_HITTER_KEYS,
+  storageKey: 'player-compare:hitterStats',
+  defaultA: 'Aaron Judge',
+  defaultB: 'Shohei Ohtani',
+  ids: {
+    aInput: 'hit-a-search', aDropdown: 'hit-a-dropdown',
+    bInput: 'hit-b-search', bDropdown: 'hit-b-dropdown',
+    swapBtn: 'hit-swap-btn', yearSelect: 'hit-year-select',
+    customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn',
+    headA: 'hit-head-a', headB: 'hit-head-b', statsCard: 'hit-stats-card',
+    loading: 'hit-loading', error: 'hit-error', content: 'hit-content',
+  },
 });
 
-splitSelect.addEventListener('change', () => {
-  state.splitKey = splitSelect.value;
-  render();
+createCompareTab({
+  statType: 'pit',
+  statGroups: STAT_GROUPS_PITCHING,
+  defaultKeys: DEFAULT_PITCHER_KEYS,
+  storageKey: 'player-compare:pitcherStats',
+  defaultA: 'Paul Skenes',
+  defaultB: 'Tarik Skubal',
+  ids: {
+    aInput: 'pit-a-search', aDropdown: 'pit-a-dropdown',
+    bInput: 'pit-b-search', bDropdown: 'pit-b-dropdown',
+    swapBtn: 'pit-swap-btn', yearSelect: 'pit-year-select',
+    customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn',
+    headA: 'pit-head-a', headB: 'pit-head-b', statsCard: 'pit-stats-card',
+    loading: 'pit-loading', error: 'pit-error', content: 'pit-content',
+  },
 });
 
-populateSplitSelect();
-render();
+// ─── Tab switching ────────────────────────────────────────────────────────────
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
+    const tab = btn.dataset.tab;
+    document.getElementById('tab-hitter').classList.toggle('active', tab === 'hitter');
+    document.getElementById('tab-pitcher').classList.toggle('active', tab === 'pitcher');
+  });
+});
 </script>
 </body>
 </html>
