@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Player Percentile Compare</title>
+  <meta name="description" content="Compare two MLB hitters side by side with percentile bars for every stat.">
+  <meta property="og:title" content="Player Percentile Compare">
+  <meta property="og:description" content="Compare two MLB hitters side by side with percentile bars for every stat.">
+  <meta property="og:type" content="website">
+  <meta name="twitter:card" content="summary">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚾</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0ede8;
+      color: #1a1a1a;
+      min-height: 100vh;
+    }
+
+    .container { max-width: 900px; width: 100%; margin: 0 auto; padding: 24px; }
+
+    header { max-width: 900px; width: 100%; margin: 0 auto; padding: 28px 24px 0; }
+    header h1 { font-size: 1.5rem; font-weight: 700; letter-spacing: -0.03em; color: #1a1a1a; }
+    header p { font-size: 0.8rem; color: #888; margin-top: 3px; letter-spacing: -0.01em; }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      border: 1px solid rgba(0,0,0,0.08);
+      box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+      padding: 20px 24px;
+      margin-bottom: 16px;
+    }
+
+    .field-label {
+      font-size: 11px;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #666;
+      margin-bottom: 5px;
+    }
+
+    .toolbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .toolbar-spacer { flex: 1 1 auto; }
+
+    .select-wrap { position: relative; width: 260px; }
+    .select-wrap input {
+      width: 100%;
+      background: #fff;
+      border: 1px solid #d8d5d0;
+      border-radius: 8px;
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 0.875rem;
+      padding: 7px 12px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .select-wrap input:focus { border-color: #999; }
+
+    .dropdown-list {
+      display: none;
+      position: absolute;
+      top: calc(100% + 4px);
+      left: 0; right: 0;
+      background: #fff;
+      border: 1px solid #d8d5d0;
+      border-radius: 10px;
+      max-height: 280px;
+      overflow-y: auto;
+      z-index: 100;
+      box-shadow: 0 6px 20px rgba(0,0,0,0.12);
+    }
+    .dropdown-list.open { display: block; }
+    .dropdown-item { padding: 8px 12px; font-size: 0.85rem; cursor: pointer; transition: background 0.1s; color: #1a1a1a; }
+    .dropdown-item:hover, .dropdown-item.highlighted { background: #f0ede8; }
+
+    .year-select {
+      background: #fff;
+      border: 1px solid #d8d5d0;
+      border-radius: 8px;
+      color: #1a1a1a;
+      font-family: inherit;
+      font-size: 0.875rem;
+      padding: 7px 10px;
+      outline: none;
+      cursor: pointer;
+      transition: border-color 0.15s;
+    }
+    .year-select:focus { border-color: #999; }
+
+    .swap-btn {
+      background: #fff;
+      border: 1px solid #d8d5d0;
+      border-radius: 8px;
+      color: #555;
+      font-family: inherit;
+      font-size: 0.85rem;
+      padding: 7px 12px;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+      line-height: 1;
+    }
+    .swap-btn:hover { border-color: #999; color: #1a1a1a; }
+
+    /* Player header cards */
+    .player-heads {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr;
+      align-items: center;
+      gap: 16px;
+      padding-bottom: 14px;
+      margin-bottom: 10px;
+      border-bottom: 1px solid #ede9e4;
+    }
+    .player-head { display: flex; flex-direction: column; align-items: center; text-align: center; gap: 6px; }
+    .player-head.side-b { align-items: center; }
+    .player-photo-wrap {
+      width: 92px; height: 92px;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #ede9e4;
+      border: 3px solid #fff;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.08);
+      position: relative;
+      flex-shrink: 0;
+    }
+    .player-photo-wrap img { width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+    .player-name { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
+    .player-meta { font-size: 0.78rem; color: #888; display: flex; align-items: center; gap: 5px; justify-content: center; }
+    .team-logo { width: 15px; height: 15px; object-fit: contain; }
+    .vs-divider { font-size: 0.75rem; font-weight: 700; color: #bbb; letter-spacing: 0.05em; }
+
+    /* Stat rows */
+    .stat-section-title {
+      font-size: 0.7rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #999;
+      margin: 22px 0 8px;
+    }
+    .stat-section-title:first-child { margin-top: 0; }
+    .stat-section-note {
+      text-transform: none;
+      font-weight: 500;
+      letter-spacing: 0;
+      color: #bbb;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: 56px 1fr 132px 1fr 56px;
+      align-items: center;
+      gap: 10px;
+      padding: 5px 0;
+    }
+
+    .stat-value {
+      font-size: 0.82rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: #1a1a1a;
+    }
+    .stat-value.a { text-align: right; }
+    .stat-value.b { text-align: left; }
+    .stat-value.dim { color: #bbb; font-weight: 500; }
+
+    .stat-label {
+      text-align: center;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: #555;
+      letter-spacing: -0.01em;
+      padding: 0 2px;
+    }
+
+    .bar-track {
+      position: relative;
+      height: 14px;
+      background: #f0ede8;
+      border-radius: 3px;
+      overflow: hidden;
+      display: flex;
+    }
+    .bar-track.a { justify-content: flex-end; }
+    .bar-track.b { justify-content: flex-start; }
+    .bar-fill {
+      height: 100%;
+      border-radius: 3px;
+      min-width: 2px;
+      transition: width 0.35s ease, background-color 0.35s ease;
+    }
+
+    /* Loading / error states */
+    .state-overlay {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 60px 20px;
+      color: #999;
+      font-size: 0.85rem;
+    }
+    .spinner {
+      width: 22px; height: 22px;
+      border: 2.5px solid #ddd;
+      border-top-color: #1a1a1a;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .error-box {
+      background: #fdecea;
+      border: 1px solid #f3c6bf;
+      border-radius: 10px;
+      padding: 14px 16px;
+      color: #a83e2c;
+      font-size: 0.85rem;
+      max-width: 420px;
+      text-align: center;
+    }
+
+    footer { text-align: center; padding: 24px 0 8px; font-size: 0.75rem; color: #aaa; }
+    footer a { color: #999; text-decoration: underline; }
+    footer a:hover { color: #555; }
+
+    @media (max-width: 640px) {
+      .container, header { padding-left: 12px; padding-right: 12px; }
+      header { padding-top: 16px; }
+      .card { padding: 14px; margin-bottom: 12px; }
+      .select-wrap { width: 100%; }
+      .toolbar { gap: 10px; }
+      .player-heads { grid-template-columns: 1fr; gap: 12px; }
+      .vs-divider { order: 2; }
+      .player-head.side-b { order: 3; }
+      .legend-row, .stat-row { grid-template-columns: 44px 1fr 92px 1fr 44px; gap: 6px; }
+      .stat-value { font-size: 0.74rem; }
+      .stat-label { font-size: 0.64rem; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Player Percentile Compare</h1>
+  <p>Side-by-side stat comparison with population percentile bars for MLB hitters</p>
+</header>
+
+<div class="container">
+
+  <div class="card">
+    <div class="toolbar">
+      <div>
+        <div class="field-label">Player A</div>
+        <div class="select-wrap" id="a-select-wrap">
+          <input type="text" id="a-search" placeholder="Search player…" autocomplete="off">
+          <div class="dropdown-list" id="a-dropdown"></div>
+        </div>
+      </div>
+      <button class="swap-btn" id="swap-btn" title="Swap players">⇄ Swap</button>
+      <div>
+        <div class="field-label">Player B</div>
+        <div class="select-wrap" id="b-select-wrap">
+          <input type="text" id="b-search" placeholder="Search player…" autocomplete="off">
+          <div class="dropdown-list" id="b-dropdown"></div>
+        </div>
+      </div>
+      <div class="toolbar-spacer"></div>
+      <div>
+        <div class="field-label">Season</div>
+        <select id="year-select" class="year-select"></select>
+      </div>
+      <div>
+        <div class="field-label">Split</div>
+        <select id="split-select" class="year-select"></select>
+      </div>
+    </div>
+  </div>
+
+  <div id="loading" class="state-overlay" style="display:none">
+    <div class="spinner"></div>
+    <span>Loading season data…</span>
+  </div>
+  <div id="error" class="state-overlay" style="display:none">
+    <div class="error-box"><strong>Couldn't load data.</strong><br>The MLB Stats API or Baseball Savant proxy may be temporarily unavailable — try again in a moment.</div>
+  </div>
+
+  <div id="content" style="display:none">
+    <div class="card">
+      <div class="player-heads">
+        <div class="player-head side-a" id="head-a"></div>
+        <div class="vs-divider">VS</div>
+        <div class="player-head side-b" id="head-b"></div>
+      </div>
+      <div id="stats-card"></div>
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  Data: <a href="https://www.mlb.com/stats" target="_blank" rel="noopener">MLB Stats API</a> &amp;
+  <a href="https://baseballsavant.mlb.com" target="_blank" rel="noopener">Baseball Savant</a>. Percentiles computed against hitters with a plate appearance in the selected window. Statcast &amp; plate discipline reflect the full season.
+</footer>
+
+<script>
+// ─── Constants ───────────────────────────────────────────────────────────────
+const CURRENT_YEAR = 2026;
+const YEARS = Array.from({ length: CURRENT_YEAR - 2014 }, (_, i) => CURRENT_YEAR - i);
+const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
+
+const DEFAULT_A = 'Aaron Judge';
+const DEFAULT_B = 'Shohei Ohtani';
+
+// ─── Stat configuration ──────────────────────────────────────────────────────
+// source: 'standard' (MLB Stats API), 'xstats' / 'statcast' / 'discipline' (Savant leaderboards)
+function fmtRate(v) {
+  if (v == null || isNaN(v)) return null;
+  const s = v.toFixed(3);
+  return v < 0 ? '-' + s.slice(3).replace('-', '') : s.slice(1);
+}
+function fmtPct(v) { return (v == null || isNaN(v)) ? null : v.toFixed(1) + '%'; }
+function fmtInt(v) { return (v == null || isNaN(v)) ? null : String(Math.round(v)); }
+function fmtMph(v) { return (v == null || isNaN(v)) ? null : v.toFixed(1); }
+
+const STAT_GROUPS = [
+  {
+    title: 'Standard',
+    stats: [
+      { key: 'gamesPlayed', label: 'G', source: 'standard', fmt: fmtInt },
+      { key: 'plateAppearances', label: 'PA', source: 'standard', fmt: fmtInt },
+      { key: 'hits', label: 'H', source: 'standard', fmt: fmtInt },
+      { key: 'homeRuns', label: 'HR', source: 'standard', fmt: fmtInt },
+      { key: 'rbi', label: 'RBI', source: 'standard', fmt: fmtInt },
+      { key: 'stolenBases', label: 'SB', source: 'standard', fmt: fmtInt },
+      { key: 'avg', label: 'AVG', source: 'standard', fmt: fmtRate },
+      { key: 'obp', label: 'OBP', source: 'standard', fmt: fmtRate },
+      { key: 'slg', label: 'SLG', source: 'standard', fmt: fmtRate },
+      { key: 'ops', label: 'OPS', source: 'standard', fmt: fmtRate },
+    ],
+  },
+  {
+    title: 'Statcast',
+    stats: [
+      { key: 'est_woba', label: 'xwOBA', source: 'xstats', fmt: fmtRate },
+      { key: 'est_ba', label: 'xBA', source: 'xstats', fmt: fmtRate },
+      { key: 'est_slg', label: 'xSLG', source: 'xstats', fmt: fmtRate },
+      { key: 'avg_hit_speed', label: 'Avg Exit Velo', source: 'statcast', fmt: fmtMph },
+      { key: 'max_hit_speed', label: 'Max Exit Velo', source: 'statcast', fmt: fmtMph },
+      { key: 'brl_percent', label: 'Barrel %', source: 'statcast', fmt: fmtPct },
+      { key: 'ev95percent', label: 'Hard-Hit %', source: 'statcast', fmt: fmtPct },
+      { key: 'anglesweetspotpercent', label: 'Sweet-Spot %', source: 'statcast', fmt: fmtPct },
+    ],
+  },
+  {
+    title: 'Plate Discipline',
+    stats: [
+      { key: 'k_percent', label: 'K %', source: 'discipline', fmt: fmtPct, lowerIsBetter: true },
+      { key: 'bb_percent', label: 'BB %', source: 'discipline', fmt: fmtPct },
+      { key: 'whiff_percent', label: 'Whiff %', source: 'discipline', fmt: fmtPct, lowerIsBetter: true },
+    ],
+  },
+];
+
+// ─── CSV parsing (handles quoted fields with embedded commas) ──────────────────
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const header = rows[0];
+  return rows.slice(1).map(r => {
+    const obj = {};
+    header.forEach((h, i) => { obj[h] = r[i]; });
+    return obj;
+  });
+}
+
+function num(v) {
+  if (v == null || v === '') return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+// ─── Percentile computation ─────────────────────────────────────────────────
+// entries: [{id, value}] -> Map<id, percentile 0-100>
+function computePercentiles(entries) {
+  const valid = entries.filter(e => e.value != null && !isNaN(e.value));
+  const sorted = valid.slice().sort((a, b) => a.value - b.value);
+  const n = sorted.length;
+  const map = new Map();
+  let i = 0;
+  while (i < n) {
+    let j = i;
+    while (j < n && sorted[j].value === sorted[i].value) j++;
+    const avgIndex = (i + j - 1) / 2;
+    const pct = n === 1 ? 50 : (avgIndex / (n - 1)) * 100;
+    for (let k = i; k < j; k++) map.set(sorted[k].id, pct);
+    i = j;
+  }
+  return map;
+}
+
+// ─── Data loading ────────────────────────────────────────────────────────────
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Fetch failed: ' + url);
+  return r.json();
+}
+async function fetchCSV(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error('Fetch failed: ' + url);
+  return parseCSV(await r.text());
+}
+
+// ─── Splits ──────────────────────────────────────────────────────────────────
+const MONTH_NAMES = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+function getSplitOptions(year) {
+  const now = new Date();
+  const isCurrentYear = year === now.getUTCFullYear();
+  const opts = [{ key: 'season', label: 'Full Season' }];
+  if (isCurrentYear) {
+    opts.push({ key: 'last7', label: 'Last 7 Days', days: 7 });
+    opts.push({ key: 'last15', label: 'Last 15 Days', days: 15 });
+    opts.push({ key: 'last30', label: 'Last 30 Days', days: 30 });
+  }
+  const lastMonth = isCurrentYear ? now.getUTCMonth() : 9; // March(2)..October(9) for completed seasons
+  for (let m = 2; m <= lastMonth; m++) opts.push({ key: `month${m}`, label: MONTH_NAMES[m], month: m });
+  return opts;
+}
+
+function splitDateRange(year, split) {
+  if (!split || split.key === 'season') return null;
+  if (split.days) {
+    const end = new Date();
+    const start = new Date(end.getTime() - split.days * 86400000);
+    return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+  }
+  if (split.month != null) {
+    const start = new Date(Date.UTC(year, split.month, 1));
+    let end = new Date(Date.UTC(year, split.month + 1, 0));
+    const now = new Date();
+    if (year === now.getUTCFullYear() && split.month === now.getUTCMonth()) end = now;
+    return { startDate: start.toISOString().slice(0, 10), endDate: end.toISOString().slice(0, 10) };
+  }
+  return null;
+}
+
+function standardStatsUrl(year, dateRange) {
+  const base = `https://statsapi.mlb.com/api/v1/stats?group=hitting&season=${year}&sportId=1&limit=3000&playerPool=all`;
+  return dateRange
+    ? `${base}&stats=byDateRange&startDate=${dateRange.startDate}&endDate=${dateRange.endDate}`
+    : `${base}&stats=season`;
+}
+
+// ─── Data loading ────────────────────────────────────────────────────────────
+// Identity (name/team/position) always reflects the full season roster, so the
+// search dropdown and player card stay populated even for a narrow split.
+const identityCache = new Map();      // year -> Map<id, identity>
+const standardSplitCache = new Map(); // `${year}:${splitKey}` -> { valuesById, percentiles }
+const extrasCache = new Map();        // year -> { xstatsById, statcastById, disciplineById, percentiles }
+
+async function loadIdentity(year) {
+  if (identityCache.has(year)) return identityCache.get(year);
+  const json = await fetchJSON(standardStatsUrl(year, null));
+  const splits = (json.stats && json.stats[0] && json.stats[0].splits) || [];
+  const map = new Map();
+  for (const s of splits) {
+    map.set(s.player.id, {
+      id: s.player.id,
+      name: s.player.fullName,
+      teamId: s.team ? s.team.id : null,
+      teamName: s.team ? s.team.name : '',
+      position: s.position ? s.position.abbreviation : '',
+    });
+  }
+  identityCache.set(year, map);
+  return map;
+}
+
+async function loadStandardSplit(year, split) {
+  const cacheKey = `${year}:${split.key}`;
+  if (standardSplitCache.has(cacheKey)) return standardSplitCache.get(cacheKey);
+  const dateRange = splitDateRange(year, split);
+  const json = await fetchJSON(standardStatsUrl(year, dateRange));
+  const splitsArr = (json.stats && json.stats[0] && json.stats[0].splits) || [];
+  const valuesById = new Map();
+  for (const s of splitsArr) {
+    const st = s.stat;
+    valuesById.set(s.player.id, {
+      gamesPlayed: num(st.gamesPlayed),
+      plateAppearances: num(st.plateAppearances),
+      hits: num(st.hits),
+      homeRuns: num(st.homeRuns),
+      rbi: num(st.rbi),
+      stolenBases: num(st.stolenBases),
+      avg: num(st.avg),
+      obp: num(st.obp),
+      slg: num(st.slg),
+      ops: num(st.ops),
+    });
+  }
+  const standardStats = STAT_GROUPS.find(g => g.title === 'Standard').stats;
+  const percentiles = new Map();
+  for (const stat of standardStats) {
+    const entries = [];
+    for (const [id, v] of valuesById) {
+      if (v[stat.key] != null) entries.push({ id, value: v[stat.key] });
+    }
+    percentiles.set(stat.key, computePercentiles(entries));
+  }
+  const result = { valuesById, percentiles };
+  standardSplitCache.set(cacheKey, result);
+  return result;
+}
+
+async function loadExtras(year) {
+  if (extrasCache.has(year)) return extrasCache.get(year);
+  const xstatsUrl = `${SAVANT_PROXY}?path=/leaderboard/expected_statistics&type=batter&year=${year}&min=1&csv=true`;
+  const statcastUrl = `${SAVANT_PROXY}?path=/leaderboard/statcast&type=batter&year=${year}&min=1&csv=true`;
+  const disciplineUrl = `${SAVANT_PROXY}?path=/leaderboard/custom&type=batter&year=${year}&filter=&min=1&selections=pa,k_percent,bb_percent,whiff_percent&chart=false&x=pa&y=pa&r=no&chartType=beeswarm&csv=true`;
+
+  const [xstatsRows, statcastRows, disciplineRows] = await Promise.all([
+    fetchCSV(xstatsUrl).catch(() => []),
+    fetchCSV(statcastUrl).catch(() => []),
+    fetchCSV(disciplineUrl).catch(() => []),
+  ]);
+
+  const xstatsById = new Map(), statcastById = new Map(), disciplineById = new Map();
+  for (const row of xstatsRows) {
+    xstatsById.set(parseInt(row.player_id, 10), { est_woba: num(row.est_woba), est_ba: num(row.est_ba), est_slg: num(row.est_slg) });
+  }
+  for (const row of statcastRows) {
+    statcastById.set(parseInt(row.player_id, 10), {
+      avg_hit_speed: num(row.avg_hit_speed),
+      max_hit_speed: num(row.max_hit_speed),
+      brl_percent: num(row.brl_percent),
+      ev95percent: num(row.ev95percent),
+      anglesweetspotpercent: num(row.anglesweetspotpercent),
+    });
+  }
+  for (const row of disciplineRows) {
+    disciplineById.set(parseInt(row.player_id, 10), {
+      k_percent: num(row.k_percent),
+      bb_percent: num(row.bb_percent),
+      whiff_percent: num(row.whiff_percent),
+    });
+  }
+
+  const byIdMaps = { xstats: xstatsById, statcast: statcastById, discipline: disciplineById };
+  const percentiles = new Map();
+  for (const group of STAT_GROUPS) {
+    if (group.title === 'Standard') continue;
+    for (const stat of group.stats) {
+      const map = byIdMaps[stat.source];
+      const entries = [];
+      for (const [id, v] of map) {
+        if (v[stat.key] != null) entries.push({ id, value: v[stat.key] });
+      }
+      percentiles.set(stat.key, computePercentiles(entries));
+    }
+  }
+
+  const result = { xstatsById, statcastById, disciplineById, percentiles };
+  extrasCache.set(year, result);
+  return result;
+}
+
+async function loadCombined(year, split) {
+  const [identity, standardSplit, extras] = await Promise.all([
+    loadIdentity(year),
+    loadStandardSplit(year, split),
+    loadExtras(year),
+  ]);
+  const players = new Map();
+  for (const [id, idn] of identity) {
+    players.set(id, {
+      id,
+      name: idn.name,
+      teamId: idn.teamId,
+      teamName: idn.teamName,
+      position: idn.position,
+      standard: standardSplit.valuesById.get(id) || {},
+      xstats: extras.xstatsById.get(id) || {},
+      statcast: extras.statcastById.get(id) || {},
+      discipline: extras.disciplineById.get(id) || {},
+    });
+  }
+  const percentiles = new Map([...standardSplit.percentiles, ...extras.percentiles]);
+  return { players, percentiles, isSplit: split.key !== 'season' };
+}
+
+// ─── Color scale (pale -> deep red as percentile rises) ────────────────────
+function percentileColor(pct) {
+  const t = Math.max(0, Math.min(1, pct / 100));
+  // pale cream (#f4ede7) -> deep red (#c0392b), through a mid pink
+  const stops = [
+    { p: 0, c: [244, 237, 231] },
+    { p: 0.5, c: [237, 170, 155] },
+    { p: 1, c: [192, 57, 43] },
+  ];
+  let lo = stops[0], hi = stops[stops.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (t >= stops[i].p && t <= stops[i + 1].p) { lo = stops[i]; hi = stops[i + 1]; break; }
+  }
+  const span = hi.p - lo.p || 1;
+  const localT = (t - lo.p) / span;
+  const rgb = lo.c.map((v, i) => Math.round(v + (hi.c[i] - v) * localT));
+  return `rgb(${rgb.join(',')})`;
+}
+
+// ─── Searchable dropdown (mirrors fg-war pattern) ───────────────────────────
+function deaccent(str) { return str.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(); }
+
+function buildDropdown(inputEl, dropdownEl, onSelect, getPlayers) {
+  let filtered = [];
+  let highlighted = -1;
+
+  function sortedByLastName(arr) {
+    return [...arr].sort((a, b) => a.name.split(' ').pop().localeCompare(b.name.split(' ').pop()));
+  }
+
+  function render(list) {
+    filtered = list;
+    highlighted = -1;
+    dropdownEl.innerHTML = list.length
+      ? list.map((p, i) => `<div class="dropdown-item" data-i="${i}">${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}</div>`).join('')
+      : '<div class="dropdown-item" style="color:#aaa;cursor:default">No results</div>';
+    dropdownEl.classList.add('open');
+  }
+  function close() { dropdownEl.classList.remove('open'); highlighted = -1; }
+  function pick(p) {
+    inputEl.value = `${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}`;
+    close();
+    onSelect(p);
+  }
+
+  inputEl.addEventListener('focus', () => render(sortedByLastName(getPlayers())));
+  inputEl.addEventListener('input', () => {
+    const q = deaccent(inputEl.value.trim());
+    const list = sortedByLastName(getPlayers());
+    render(q ? list.filter(p => deaccent(p.name).includes(q)) : list);
+  });
+  inputEl.addEventListener('keydown', e => {
+    const items = dropdownEl.querySelectorAll('.dropdown-item[data-i]');
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      highlighted = Math.min(highlighted + 1, items.length - 1);
+      items.forEach((el, i) => el.classList.toggle('highlighted', i === highlighted));
+      items[highlighted]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      highlighted = Math.max(highlighted - 1, 0);
+      items.forEach((el, i) => el.classList.toggle('highlighted', i === highlighted));
+      items[highlighted]?.scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter' && highlighted >= 0) {
+      e.preventDefault();
+      if (filtered[highlighted]) pick(filtered[highlighted]);
+    } else if (e.key === 'Escape') { close(); inputEl.blur(); }
+  });
+  dropdownEl.addEventListener('mousedown', e => {
+    const item = e.target.closest('.dropdown-item[data-i]');
+    if (item) { e.preventDefault(); pick(filtered[+item.dataset.i]); }
+  });
+  document.addEventListener('click', e => {
+    if (!inputEl.contains(e.target) && !dropdownEl.contains(e.target)) close();
+  });
+
+  return { setValueSilently: (p) => { inputEl.value = `${p.name}${p.teamName ? ' (' + p.teamName + ')' : ''}`; } };
+}
+
+// ─── Rendering ───────────────────────────────────────────────────────────────
+function headshotUrl(id) {
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/d_people:generic:headshot:67:current.png/w_213,q_auto:best/v1/people/${id}/headshot/67/current`;
+}
+function teamLogoUrl(teamId) { return `https://www.mlbstatic.com/team-logos/${teamId}.svg`; }
+
+function renderPlayerHead(el, p) {
+  el.innerHTML = `
+    <div class="player-photo-wrap">
+      <img src="${headshotUrl(p.id)}" alt="${p.name}" onerror="this.style.display='none'">
+    </div>
+    <div class="player-name">${p.name}</div>
+    <div class="player-meta">
+      ${p.teamId ? `<img class="team-logo" src="${teamLogoUrl(p.teamId)}" onerror="this.style.display='none'">` : ''}
+      <span>${p.position || ''}${p.position && p.teamName ? ' · ' : ''}${p.teamName || ''}</span>
+    </div>`;
+}
+
+function renderStats(combined, playerA, playerB) {
+  const card = document.getElementById('stats-card');
+  let html = '';
+
+  for (const group of STAT_GROUPS) {
+    const note = (combined.isSplit && group.title !== 'Standard') ? ' <span class="stat-section-note">· full season</span>' : '';
+    html += `<div class="stat-section-title">${group.title}${note}</div>`;
+    for (const stat of group.stats) {
+      const va = playerA[stat.source][stat.key];
+      const vb = playerB[stat.source][stat.key];
+      const pctMapRaw = combined.percentiles.get(stat.key);
+      let pctA = pctMapRaw.has(playerA.id) ? pctMapRaw.get(playerA.id) : null;
+      let pctB = pctMapRaw.has(playerB.id) ? pctMapRaw.get(playerB.id) : null;
+      if (stat.lowerIsBetter) {
+        if (pctA != null) pctA = 100 - pctA;
+        if (pctB != null) pctB = 100 - pctB;
+      }
+      const fa = stat.fmt(va);
+      const fb = stat.fmt(vb);
+      const colorA = pctA != null ? percentileColor(pctA) : '#e8e4de';
+      const colorB = pctB != null ? percentileColor(pctB) : '#e8e4de';
+      const widthA = pctA != null ? Math.max(pctA, 3) : 0;
+      const widthB = pctB != null ? Math.max(pctB, 3) : 0;
+
+      html += `
+        <div class="stat-row">
+          <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
+          <div class="bar-track a"><div class="bar-fill" style="width:${widthA}%;background:${colorA}"></div></div>
+          <div class="stat-label">${stat.label}</div>
+          <div class="bar-track b"><div class="bar-fill" style="width:${widthB}%;background:${colorB}"></div></div>
+          <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
+        </div>`;
+    }
+  }
+
+  card.innerHTML = html;
+}
+
+// ─── App state & wiring ──────────────────────────────────────────────────────
+let state = { year: CURRENT_YEAR, splitKey: 'season', playerA: null, playerB: null };
+
+function getCurrentSplit() {
+  return getSplitOptions(state.year).find(s => s.key === state.splitKey) || { key: 'season', label: 'Full Season' };
+}
+
+function setLoading(isLoading, isError) {
+  document.getElementById('loading').style.display = isLoading ? 'flex' : 'none';
+  document.getElementById('error').style.display = isError ? 'flex' : 'none';
+  document.getElementById('content').style.display = (!isLoading && !isError) ? 'block' : 'none';
+}
+
+async function render() {
+  setLoading(true, false);
+  try {
+    const combined = await loadCombined(state.year, getCurrentSplit());
+    let pA = state.playerA ? combined.players.get(state.playerA) : null;
+    let pB = state.playerB ? combined.players.get(state.playerB) : null;
+
+    if (!pA || !pB) {
+      const list = [...combined.players.values()];
+      const findByName = (name) => list.find(p => p.name === name);
+      pA = pA || findByName(DEFAULT_A) || list[0];
+      pB = pB || findByName(DEFAULT_B) || list[1] || list[0];
+      state.playerA = pA.id;
+      state.playerB = pB.id;
+      aDropdown.setValueSilently(pA);
+      bDropdown.setValueSilently(pB);
+    }
+
+    renderPlayerHead(document.getElementById('head-a'), pA);
+    renderPlayerHead(document.getElementById('head-b'), pB);
+    renderStats(combined, pA, pB);
+    setLoading(false, false);
+  } catch (err) {
+    console.error(err);
+    setLoading(false, true);
+  }
+}
+
+function getPlayersForYear() {
+  const identity = identityCache.get(state.year);
+  return identity ? [...identity.values()] : [];
+}
+
+const aInput = document.getElementById('a-search');
+const aDropdownEl = document.getElementById('a-dropdown');
+const bInput = document.getElementById('b-search');
+const bDropdownEl = document.getElementById('b-dropdown');
+
+const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; render(); }, getPlayersForYear);
+const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; render(); }, getPlayersForYear);
+
+document.getElementById('swap-btn').addEventListener('click', () => {
+  [state.playerA, state.playerB] = [state.playerB, state.playerA];
+  const identity = identityCache.get(state.year);
+  if (identity) {
+    aDropdown.setValueSilently(identity.get(state.playerA));
+    bDropdown.setValueSilently(identity.get(state.playerB));
+  }
+  render();
+});
+
+const yearSelect = document.getElementById('year-select');
+yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
+yearSelect.value = String(CURRENT_YEAR);
+
+const splitSelect = document.getElementById('split-select');
+function populateSplitSelect() {
+  const opts = getSplitOptions(state.year);
+  const prevKey = state.splitKey;
+  splitSelect.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+  state.splitKey = opts.some(o => o.key === prevKey) ? prevKey : 'season';
+  splitSelect.value = state.splitKey;
+}
+
+yearSelect.addEventListener('change', () => {
+  state.year = parseInt(yearSelect.value, 10);
+  state.playerA = null;
+  state.playerB = null;
+  populateSplitSelect();
+  render();
+});
+
+splitSelect.addEventListener('change', () => {
+  state.splitKey = splitSelect.value;
+  render();
+});
+
+populateSplitSelect();
+render();
+</script>
+</body>
+</html>
