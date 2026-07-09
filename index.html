@@ -399,21 +399,26 @@ function getSplitOptions(year) {
   const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return fmt(d); };
   const today = fmt(now);
 
+  // `days` is the approximate window length, used to scale the percentile
+  // sample-size floor (see getSampleFloor) — without it, a fixed 100 PA / 20 IP
+  // floor is literally unreachable in a 7- or 14-day window (nobody gets 100 PA
+  // in two weeks), so the entire reference population empties out and every
+  // bar comes back blank. Full Season omits `days` and uses the base floor.
   const all = [
     { key: 'season', label: 'Full Season', params: { month: '0' } },
-    { key: 'last7',  label: 'Last 7 Days',  params: { month: '1000', startdate: daysAgo(7),  enddate: today }, currentOnly: true },
-    { key: 'last14', label: 'Last 14 Days', params: { month: '1000', startdate: daysAgo(14), enddate: today }, currentOnly: true },
-    { key: 'last30', label: 'Last 30 Days', params: { month: '1000', startdate: daysAgo(30), enddate: today }, currentOnly: true },
-    { key: 'last60', label: 'Last 60 Days', params: { month: '1000', startdate: daysAgo(60), enddate: today }, currentOnly: true },
-    { key: 'last90', label: 'Last 90 Days', params: { month: '1000', startdate: daysAgo(90), enddate: today }, currentOnly: true },
-    { key: 'marapr', label: 'March/April', params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-05-01` }, startMonth: 4 },
-    { key: 'may',    label: 'May',         params: { month: '5' }, startMonth: 5 },
-    { key: 'june',   label: 'June',        params: { month: '6' }, startMonth: 6 },
-    { key: 'july',   label: 'July',        params: { month: '7' }, startMonth: 7 },
-    { key: 'august', label: 'August',      params: { month: '8' }, startMonth: 8 },
-    { key: 'sepoct', label: 'Sept/Oct',    params: { month: '9' }, startMonth: 9 },
-    { key: 'h1',     label: 'First Half',  params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-07-12` }, startMonth: 4 },
-    { key: 'h2',     label: 'Second Half', params: { month: '1000', startdate: `${yr}-07-12`, enddate: `${yr}-11-01` }, startMonth: 7 },
+    { key: 'last7',  label: 'Last 7 Days',  params: { month: '1000', startdate: daysAgo(7),  enddate: today }, currentOnly: true, days: 7 },
+    { key: 'last14', label: 'Last 14 Days', params: { month: '1000', startdate: daysAgo(14), enddate: today }, currentOnly: true, days: 14 },
+    { key: 'last30', label: 'Last 30 Days', params: { month: '1000', startdate: daysAgo(30), enddate: today }, currentOnly: true, days: 30 },
+    { key: 'last60', label: 'Last 60 Days', params: { month: '1000', startdate: daysAgo(60), enddate: today }, currentOnly: true, days: 60 },
+    { key: 'last90', label: 'Last 90 Days', params: { month: '1000', startdate: daysAgo(90), enddate: today }, currentOnly: true, days: 90 },
+    { key: 'marapr', label: 'March/April', params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-05-01` }, startMonth: 4, days: 61 },
+    { key: 'may',    label: 'May',         params: { month: '5' }, startMonth: 5, days: 31 },
+    { key: 'june',   label: 'June',        params: { month: '6' }, startMonth: 6, days: 30 },
+    { key: 'july',   label: 'July',        params: { month: '7' }, startMonth: 7, days: 31 },
+    { key: 'august', label: 'August',      params: { month: '8' }, startMonth: 8, days: 31 },
+    { key: 'sepoct', label: 'Sept/Oct',    params: { month: '9' }, startMonth: 9, days: 61 },
+    { key: 'h1',     label: 'First Half',  params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-07-12` }, startMonth: 4, days: 133 },
+    { key: 'h2',     label: 'Second Half', params: { month: '1000', startdate: `${yr}-07-12`, enddate: `${yr}-11-01` }, startMonth: 7, days: 112 },
   ];
 
   return all.filter(o => {
@@ -654,7 +659,22 @@ function formatStat(v, key) {
   return Number.isInteger(v) ? String(v) : v.toFixed(2);
 }
 
-function sampleFloorLabel(statType) { return statType === 'bat' ? '100 PA' : '20 IP'; }
+// Base floor (100 PA / 20 IP) is calibrated for a full ~187-day season.
+// Shorter splits scale it down proportionally so the reference population
+// isn't empty — a fixed 100 PA floor is unreachable within 14 days.
+const FULL_SEASON_DAYS = 187;
+function getSampleFloor(statType, days) {
+  const key = statType === 'bat' ? 'PA' : 'IP';
+  const baseMin = statType === 'bat' ? 100 : 20;
+  if (days == null) return { key, min: baseMin };
+  const floorMin = statType === 'bat' ? 8 : 2;
+  const min = Math.max(floorMin, Math.round(baseMin * days / FULL_SEASON_DAYS));
+  return { key, min };
+}
+function sampleFloorLabel(statType, days) {
+  const { min, key } = getSampleFloor(statType, days);
+  return `${min} ${key}`;
+}
 
 // Tracked-swing / pitch-velocity metrics stabilize within a handful of swings
 // or pitches, so the small-sample "unqualified" hatching doesn't apply to
@@ -841,7 +861,7 @@ async function loadLeaderboard(year, statType, statGroups, split) {
   // samples. Players below this floor still get a percentile (scored against
   // the same reference distribution) but are flagged unqualified so their
   // bars render hatched/translucent, matching Baseball Savant's convention.
-  const sampleFloor = statType === 'bat' ? { key: 'PA', min: 100 } : { key: 'IP', min: 20 };
+  const sampleFloor = getSampleFloor(statType, split.days);
 
   const players = new Map();
   for (const row of rows) {
@@ -1185,6 +1205,7 @@ function createCompareTab(cfg) {
   function renderStatsOnly() {
     if (!current) return;
     const { lb, pA, pB } = current;
+    const splitDays = getCurrentSplit().days;
     let html = '';
     for (const key of state.statKeys) {
       const meta = statMeta(key);
@@ -1216,13 +1237,13 @@ function createCompareTab(cfg) {
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
-          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
+          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
             <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
-          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
+          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
