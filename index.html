@@ -408,6 +408,7 @@ const STAT_GROUPS_HITTING = [
   { group: 'Baserunning', stats: [
     { key: 'SB', label: 'SB' }, { key: 'CS', label: 'CS' },
     { key: 'BaseRunning', label: 'BsR' }, { key: 'Spd', label: 'Spd' },
+    { key: 'SprintSpeed', label: 'Sprint Speed' },
   ]},
   { group: 'Batted Ball Quality', stats: [
     { key: 'EV', label: 'EV' }, { key: 'EV90', label: 'EV90' }, { key: 'LA', label: 'LA' },
@@ -548,7 +549,7 @@ function formatStat(v, key) {
   if (PCT_KEYS.has(key)) return (v * 100).toFixed(1) + '%';
   if (['ERA','FIP','xFIP','SIERA','xERA','WHIP','HR/9','BB/9','K/9','H/9','K/BB','GB/FB','Spd','BB/K'].includes(key)) return v.toFixed(2);
   if (['WAR','IP','Start-IP','Relief-IP','WPA','-WPA','+WPA','Starting','Relieving','RAR','Batting','Offense',
-       'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle','BatSpeed','SwingLen'].includes(key)) return v.toFixed(1);
+       'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle','BatSpeed','SwingLen','SprintSpeed'].includes(key)) return v.toFixed(1);
   if (['ERA-','FIP-','xFIP-','sp_stuff','sp_location','sp_pitching','wRC+','AVG+','BB%+','K%+','OBP+','SLG+','ISO+','BABIP+'].includes(key)) return String(Math.round(v));
   if (key.startsWith('pfxv')) return v.toFixed(1);
   if (key === 'Age') return String(Math.round(v));
@@ -664,6 +665,27 @@ async function loadBatTracking(year, savantType) {
   return map;
 }
 
+// Baseball Savant's Sprint Speed (Statcast-measured ft/sec) — supplemental to
+// FanGraphs, keyed by MLBAM id. Hitters only.
+async function loadSprintSpeed(year) {
+  const params = new URLSearchParams({
+    path: '/leaderboard/custom', type: 'batter', year: String(year), filter: '', min: '1',
+    selections: 'pa,sprint_speed', chart: 'false', x: 'pa', y: 'pa', r: 'no', chartType: 'beeswarm', csv: 'true',
+  });
+  const resp = await fetch(`${SAVANT_PROXY}?${params}`);
+  if (!resp.ok) return new Map();
+  const text = await resp.text();
+  if (text.trim().startsWith('<')) return new Map();
+  const rows = parseCSV(text);
+  const map = new Map();
+  for (const row of rows) {
+    const id = parseInt(row.player_id, 10);
+    if (!id) continue;
+    map.set(id, { SprintSpeed: csvNum(row.sprint_speed) });
+  }
+  return map;
+}
+
 // ─── Data loading ────────────────────────────────────────────────────────────
 const leaderboardCache = new Map(); // `${year}:${statType}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
 
@@ -677,9 +699,10 @@ async function loadLeaderboard(year, statType, statGroups) {
     pageitems: '10000', pagenum: '1', sortstat: 'WAR', sortdir: 'default',
   });
   const savantType = statType === 'bat' ? 'batter' : 'pitcher';
-  const [resp, batTracking] = await Promise.all([
+  const [resp, batTracking, sprintSpeed] = await Promise.all([
     fetch(`${FG_PROXY}?${params}`),
     loadBatTracking(year, savantType).catch(() => new Map()),
+    statType === 'bat' ? loadSprintSpeed(year).catch(() => new Map()) : Promise.resolve(new Map()),
   ]);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
@@ -701,6 +724,8 @@ async function loadLeaderboard(year, statType, statGroups) {
     const mlbId = row.xMLBAMID || null;
     const bt = mlbId ? batTracking.get(mlbId) : null;
     if (bt) Object.assign(row, bt);
+    const ss = mlbId ? sprintSpeed.get(mlbId) : null;
+    if (ss) Object.assign(row, ss);
     players.set(row.playerid, {
       id: row.playerid,
       mlbId,
