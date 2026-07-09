@@ -116,7 +116,13 @@
     .player-name { font-size: 1.05rem; font-weight: 700; letter-spacing: -0.02em; }
     .player-meta { font-size: 0.78rem; color: #888; display: flex; align-items: center; gap: 5px; justify-content: center; }
     .team-logo { width: 15px; height: 15px; object-fit: contain; }
-    .vs-divider { font-size: 0.75rem; font-weight: 700; color: #bbb; letter-spacing: 0.05em; }
+    .vs-divider { font-size: 0.75rem; font-weight: 700; color: #bbb; letter-spacing: 0.05em; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+    .split-badge {
+      font-size: 0.62rem; font-weight: 600; color: #a86b2f; background: #f7ecd9;
+      border: 1px solid #e8d3ae; border-radius: 20px; padding: 2px 9px;
+      white-space: nowrap; letter-spacing: 0; text-transform: none; display: none;
+    }
+    .split-badge.visible { display: inline-block; }
 
     /* Stat rows */
     .stat-row {
@@ -298,7 +304,7 @@
       <div class="card">
         <div class="player-heads">
           <div class="player-head side-a" id="hit-head-a"></div>
-          <div class="vs-divider">VS</div>
+          <div class="vs-divider">VS<div class="split-badge"></div></div>
           <div class="player-head side-b" id="hit-head-b"></div>
         </div>
         <div id="hit-stats-card"></div>
@@ -352,7 +358,7 @@
       <div class="card">
         <div class="player-heads">
           <div class="player-head side-a" id="pit-head-a"></div>
-          <div class="vs-divider">VS</div>
+          <div class="vs-divider">VS<div class="split-badge"></div></div>
           <div class="player-head side-b" id="pit-head-b"></div>
         </div>
         <div id="pit-stats-card"></div>
@@ -1019,6 +1025,7 @@ function createCompareTab(cfg) {
   const customizeBtn = el(cfg.ids.customizeBtn);
   const resetBtn = el(cfg.ids.resetBtn);
   const headA = el(cfg.ids.headA), headB = el(cfg.ids.headB);
+  const splitBadge = headA.closest('.player-heads').querySelector('.split-badge');
   const statsCard = el(cfg.ids.statsCard);
   const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
 
@@ -1164,6 +1171,9 @@ function createCompareTab(cfg) {
       current = { lb, pA, pB };
       renderPlayerHead(headA, pA, cfg.statType);
       renderPlayerHead(headB, pB, cfg.statType);
+      const split = getCurrentSplit();
+      splitBadge.textContent = split.label;
+      splitBadge.classList.toggle('visible', split.key !== 'season');
       renderStatsOnly();
       setLoading(false, false);
     } catch (err) {
