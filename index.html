@@ -638,7 +638,7 @@ function csvNum(v) {
 // Baseball Savant's bat-tracking leaderboard — supplemental to FanGraphs, keyed by MLBAM id.
 async function loadBatTracking(year, savantType) {
   const params = new URLSearchParams({
-    path: '/leaderboard/bat-tracking', gameType: 'Regular', minSwings: 'q', minGroupSwings: '1',
+    path: '/leaderboard/bat-tracking', gameType: 'Regular', minSwings: '1', minGroupSwings: '1',
     seasonStart: String(year), seasonEnd: String(year), type: savantType, team: '', csv: 'true',
   });
   const resp = await fetch(`${SAVANT_PROXY}?${params}`);
