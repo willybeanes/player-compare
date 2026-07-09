@@ -138,6 +138,16 @@
     }
     .stat-remove:hover { background: #f3c6bf; color: #a83e2c; }
 
+    .stat-drag-handle {
+      cursor: grab; color: #ccc; font-size: 13px; padding: 0 1px;
+      user-select: none; flex-shrink: 0; line-height: 1;
+    }
+    .stat-drag-handle:hover { color: #888; }
+    .stat-drag-handle:active { cursor: grabbing; }
+    .stat-row.dragging { opacity: 0.35; }
+    .stat-row.drag-over-top { box-shadow: inset 0 2px 0 0 #1a1a1a; }
+    .stat-row.drag-over-bottom { box-shadow: inset 0 -2px 0 0 #1a1a1a; }
+
     .add-stat-btn {
       display: block; width: 100%; margin-top: 10px; padding: 8px;
       background: none; border: 1.5px dashed #d8d5d0; border-radius: 8px;
@@ -512,7 +522,7 @@ const STAT_GROUPS_PITCHING = [
 ];
 
 const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OBP','SLG','OPS','HR','RBI','SB','xwOBA','xSLG','EV','Barrel%','HardHit%','K%','BB%'];
-const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','xFIP','WHIP','W','SV','IP','SO','K/9','BB/9','K%','BB%','HardHit%','Barrel%','EV'];
+const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','SIERA','WHIP','K%','BB%','K-BB%','HardHit%','sp_stuff','sp_location','sp_pitching','pfxvFA','SwStr%','O-Swing%'];
 
 // ─── Formatting (ported from fg-scatter's formatStat/displayVal/lowerIsBetter) ─
 const PCT_KEYS = new Set([
@@ -950,6 +960,7 @@ function createCompareTab(cfg) {
     customizing: false,
   };
   let current = null; // { lb, pA, pB }
+  let draggedKey = null;
 
   function syncURL() { updateURL(); }
   tabControllers[cfg.tabName] = {
@@ -1041,6 +1052,7 @@ function createCompareTab(cfg) {
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
+            ${state.customizing ? `<span class="stat-drag-handle" draggable="true" title="Drag to reorder">⠿</span>` : ''}
             <span class="stat-label" data-action="pick">${meta.label}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
@@ -1072,6 +1084,45 @@ function createCompareTab(cfg) {
           savePersisted();
           renderStatsOnly();
         });
+      });
+
+      const handle = row.querySelector('.stat-drag-handle');
+      handle?.addEventListener('dragstart', (e) => {
+        draggedKey = key;
+        e.dataTransfer.effectAllowed = 'move';
+        row.classList.add('dragging');
+      });
+      handle?.addEventListener('dragend', () => {
+        draggedKey = null;
+        statsCard.querySelectorAll('.stat-row').forEach(r =>
+          r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+      });
+      row.addEventListener('dragover', (e) => {
+        if (!draggedKey || draggedKey === key) return;
+        e.preventDefault();
+        const rect = row.getBoundingClientRect();
+        const isAfter = (e.clientY - rect.top) > rect.height / 2;
+        row.classList.toggle('drag-over-top', !isAfter);
+        row.classList.toggle('drag-over-bottom', isAfter);
+      });
+      row.addEventListener('dragleave', () => {
+        row.classList.remove('drag-over-top', 'drag-over-bottom');
+      });
+      row.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const isAfter = row.classList.contains('drag-over-bottom');
+        row.classList.remove('drag-over-top', 'drag-over-bottom');
+        if (!draggedKey || draggedKey === key) return;
+        const keys = state.statKeys;
+        const fromIdx = keys.indexOf(draggedKey);
+        if (fromIdx === -1) return;
+        keys.splice(fromIdx, 1);
+        let toIdx = keys.indexOf(key);
+        if (isAfter) toIdx += 1;
+        keys.splice(toIdx, 0, draggedKey);
+        draggedKey = null;
+        savePersisted();
+        renderStatsOnly();
       });
     });
     const addBtn = document.getElementById(cfg.ids.addBtn);
