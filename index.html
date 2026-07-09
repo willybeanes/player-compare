@@ -57,7 +57,6 @@
     }
 
     .toolbar { display: flex; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
-    .toolbar-spacer { flex: 1 1 auto; }
 
     .select-wrap { position: relative; width: 260px; }
     .select-wrap input {
@@ -270,7 +269,6 @@
             <div class="dropdown-list" id="hit-b-dropdown"></div>
           </div>
         </div>
-        <div class="toolbar-spacer"></div>
         <div>
           <div class="field-label">Season</div>
           <select id="hit-year-select" class="year-select"></select>
@@ -319,7 +317,6 @@
             <div class="dropdown-list" id="pit-b-dropdown"></div>
           </div>
         </div>
-        <div class="toolbar-spacer"></div>
         <div>
           <div class="field-label">Season</div>
           <select id="pit-year-select" class="year-select"></select>
@@ -530,7 +527,7 @@ const STAT_GROUPS_PITCHING = [
   ]},
 ];
 
-const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OBP','SLG','OPS','HR','RBI','SB','xwOBA','xSLG','EV','Barrel%','HardHit%','K%','BB%'];
+const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OPS','HR','SB','xwOBA','xSLG','EV90','FB%','Barrel%','HardHit%','K%','BB%','SwStr%','O-Swing%','BatSpeed','SprintSpeed'];
 const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','SIERA','WHIP','K%','BB%','K-BB%','HardHit%','sp_stuff','sp_location','sp_pitching','pfxvFA','SwStr%','O-Swing%'];
 
 // ─── Formatting (ported from fg-scatter's formatStat/displayVal/lowerIsBetter) ─
@@ -909,7 +906,11 @@ function headshotUrl(mlbId) {
 }
 function teamLogoUrl(teamId) { return `https://www.mlbstatic.com/team-logos/${teamId}.svg`; }
 
-function renderPlayerHead(el, p) {
+function renderPlayerHead(el, p, statType) {
+  const volKey = statType === 'bat' ? 'PA' : 'IP';
+  const volVal = p.raw[volKey];
+  const volLabel = volVal != null ? `${formatStat(volVal, volKey)} ${volKey}` : '';
+  const parts = [p.position, p.teamAbb, volLabel].filter(Boolean);
   el.innerHTML = `
     <div class="player-photo-wrap">
       ${p.mlbId ? `<img src="${headshotUrl(p.mlbId)}" alt="${p.name}" onerror="this.style.display='none'">` : ''}
@@ -917,7 +918,7 @@ function renderPlayerHead(el, p) {
     <div class="player-name">${p.name}</div>
     <div class="player-meta">
       ${p.teamId ? `<img class="team-logo" src="${teamLogoUrl(p.teamId)}" onerror="this.style.display='none'">` : ''}
-      <span>${p.position || ''}${p.position && p.teamAbb ? ' · ' : ''}${p.teamAbb || ''}</span>
+      <span>${parts.join(' · ')}</span>
     </div>`;
 }
 
@@ -1062,8 +1063,8 @@ function createCompareTab(cfg) {
         syncURL();
       }
       current = { lb, pA, pB };
-      renderPlayerHead(headA, pA);
-      renderPlayerHead(headB, pB);
+      renderPlayerHead(headA, pA, cfg.statType);
+      renderPlayerHead(headB, pB, cfg.statType);
       renderStatsOnly();
       setLoading(false, false);
     } catch (err) {
