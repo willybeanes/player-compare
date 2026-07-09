@@ -153,6 +153,11 @@
     .bar-track.a { justify-content: flex-end; }
     .bar-track.b { justify-content: flex-start; }
     .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.35s ease, background-color 0.35s ease; }
+    .bar-fill.unqualified {
+      opacity: 0.5;
+      background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.65) 0 3px, transparent 3px 7px);
+      cursor: help;
+    }
 
     /* Metric picker (shared floating panel) */
     .metric-picker {
@@ -551,6 +556,8 @@ function formatStat(v, key) {
   return Number.isInteger(v) ? String(v) : v.toFixed(2);
 }
 
+function sampleFloorLabel(statType) { return statType === 'bat' ? '100 PA' : '20 IP'; }
+
 // ─── Percentile computation ─────────────────────────────────────────────────
 // Builds a ranker over a (already sample-filtered) reference distribution that
 // can score ANY value against it — including a value from a player who didn't
@@ -679,6 +686,15 @@ async function loadLeaderboard(year, statType, statGroups) {
   if (json.error) throw new Error(json.error);
   const rows = json.data || [];
 
+  // Percentiles are ranked against a "meaningful sample" subset, not the full
+  // qual=0 pool — that pool is ~70% players with under 100 PA (September
+  // call-ups, injury replacements, position players who once pitched), and
+  // counting/rate stats look artificially elite against a sea of near-zero
+  // samples. Players below this floor still get a percentile (scored against
+  // the same reference distribution) but are flagged unqualified so their
+  // bars render hatched/translucent, matching Baseball Savant's convention.
+  const sampleFloor = statType === 'bat' ? { key: 'PA', min: 100 } : { key: 'IP', min: 20 };
+
   const players = new Map();
   for (const row of rows) {
     if (row.playerid == null) continue;
@@ -692,17 +708,11 @@ async function loadLeaderboard(year, statType, statGroups) {
       teamAbb: row.TeamNameAbb,
       teamId: MLB_TEAM_IDS[row.TeamNameAbb] || null,
       position: row.position || '',
+      qualified: (rawValue(row[sampleFloor.key], sampleFloor.key) ?? 0) >= sampleFloor.min,
       raw: row,
     });
   }
 
-  // Percentiles are ranked against a "meaningful sample" subset, not the full
-  // qual=0 pool — that pool is ~70% players with under 100 PA (September
-  // call-ups, injury replacements, position players who once pitched), and
-  // counting/rate stats look artificially elite against a sea of near-zero
-  // samples. The two compared players themselves are shown regardless of
-  // whether they personally clear this bar.
-  const sampleFloor = statType === 'bat' ? { key: 'PA', min: 100 } : { key: 'IP', min: 20 };
   const allKeys = new Set(statGroups.flatMap(g => g.stats.map(s => s.key)));
   const percentiles = new Map(); // key -> rank(value) function
   for (const key of allKeys) {
@@ -977,16 +987,18 @@ function createCompareTab(cfg) {
       const colorB = pctB != null ? percentileColor(pctB) : '#e8e4de';
       const widthA = pctA != null ? Math.max(pctA, 3) : 0;
       const widthB = pctB != null ? Math.max(pctB, 3) : 0;
+      const unqualA = pctA != null && !pA.qualified;
+      const unqualB = pctB != null && !pB.qualified;
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
-          <div class="bar-track a"><div class="bar-fill" style="width:${widthA}%;background:${colorA}"></div></div>
+          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div></div>
           <div class="stat-label-wrap">
             <span class="stat-label" data-action="pick">${meta.label}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
-          <div class="bar-track b"><div class="bar-fill" style="width:${widthB}%;background:${colorB}"></div></div>
+          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div></div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
