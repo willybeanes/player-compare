@@ -139,8 +139,8 @@
     .stat-remove:hover { background: #f3c6bf; color: #a83e2c; }
 
     .stat-drag-handle {
-      cursor: grab; color: #ccc; font-size: 13px; padding: 0 1px;
-      user-select: none; flex-shrink: 0; line-height: 1;
+      cursor: grab; color: #ccc; font-size: 15px; padding: 4px 3px;
+      user-select: none; flex-shrink: 0; line-height: 1; touch-action: none;
     }
     .stat-drag-handle:hover { color: #888; }
     .stat-drag-handle:active { cursor: grabbing; }
@@ -162,7 +162,11 @@
     }
     .bar-track.a { justify-content: flex-end; }
     .bar-track.b { justify-content: flex-start; }
-    .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.35s ease, background-color 0.35s ease; }
+    .bar-fill {
+      height: 100%; border-radius: 3px; min-width: 2px;
+      transition: width 0.35s ease, background-color 0.35s ease;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,0.12);
+    }
     .bar-value-label {
       position: absolute; top: 50%; transform: translate(-50%, -50%);
       font-size: 0.6rem; font-weight: 700; color: #1a1a1a; white-space: nowrap;
@@ -217,15 +221,20 @@
     @media (max-width: 640px) {
       .container, header { padding-left: 12px; padding-right: 12px; }
       header { padding-top: 16px; }
+      header h1 { font-size: 1.25rem; }
       .card { padding: 14px; margin-bottom: 12px; }
       .select-wrap { width: 100%; }
       .toolbar { gap: 10px; }
-      .player-heads { grid-template-columns: 1fr; gap: 12px; }
-      .vs-divider { order: 2; }
-      .player-head.side-b { order: 3; }
-      .stat-row { grid-template-columns: 44px 1fr 92px 1fr 44px; gap: 6px; }
-      .stat-value { font-size: 0.74rem; }
-      .stat-label { font-size: 0.62rem; }
+      .player-heads { gap: 8px; padding-bottom: 10px; }
+      .player-photo-wrap { width: 60px; height: 60px; border-width: 2px; }
+      .player-name { font-size: 0.85rem; }
+      .player-meta { font-size: 0.66rem; gap: 3px; }
+      .team-logo { width: 12px; height: 12px; }
+      .vs-divider { font-size: 0.65rem; }
+      .stat-row { grid-template-columns: 40px 1fr 78px 1fr 40px; gap: 5px; }
+      .stat-value { font-size: 0.7rem; }
+      .stat-label { font-size: 0.58rem; }
+      .bar-value-label { font-size: 0.54rem; }
     }
   </style>
 </head>
@@ -612,7 +621,7 @@ function percentileColor(pct) {
   const t = Math.max(0, Math.min(1, pct / 100));
   const stops = [
     { p: 0, c: [70, 130, 210] },
-    { p: 0.5, c: [244, 237, 231] },
+    { p: 0.5, c: [222, 213, 200] },
     { p: 1, c: [192, 57, 43] },
   ];
   let lo = stops[0], hi = stops[stops.length - 1];
@@ -961,11 +970,57 @@ function createCompareTab(cfg) {
   };
   let current = null; // { lb, pA, pB }
   let draggedKey = null;
+  let dragPointerId = null;
+  let dragTarget = null; // { key, isAfter }
 
   function syncURL() { updateURL(); }
   tabControllers[cfg.tabName] = {
     getShareState: () => ({ year: state.year, a: state.playerAName, b: state.playerBName }),
   };
+
+  // Pointer-events based drag reordering (works for mouse, touch, and pen —
+  // native HTML5 drag-and-drop never fires on touch devices at all).
+  document.addEventListener('pointermove', (e) => {
+    if (draggedKey == null || e.pointerId !== dragPointerId) return;
+    const rows = [...statsCard.querySelectorAll('.stat-row')];
+    rows.forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+    const overRow = rows.find(r => {
+      const rect = r.getBoundingClientRect();
+      return e.clientY >= rect.top && e.clientY <= rect.bottom;
+    });
+    if (overRow && overRow.dataset.key !== draggedKey) {
+      const rect = overRow.getBoundingClientRect();
+      const isAfter = (e.clientY - rect.top) > rect.height / 2;
+      overRow.classList.toggle('drag-over-top', !isAfter);
+      overRow.classList.toggle('drag-over-bottom', isAfter);
+      dragTarget = { key: overRow.dataset.key, isAfter };
+    } else {
+      dragTarget = null;
+    }
+  });
+  function endDrag(e) {
+    if (draggedKey == null || (e && e.pointerId !== dragPointerId)) return;
+    const key = draggedKey, target = dragTarget;
+    statsCard.querySelectorAll('.stat-row').forEach(r =>
+      r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+    document.body.style.userSelect = '';
+    draggedKey = null;
+    dragPointerId = null;
+    dragTarget = null;
+    if (target && target.key !== key) {
+      const keys = state.statKeys;
+      const fromIdx = keys.indexOf(key);
+      if (fromIdx === -1) return;
+      keys.splice(fromIdx, 1);
+      let toIdx = keys.indexOf(target.key);
+      if (target.isAfter) toIdx += 1;
+      keys.splice(toIdx, 0, key);
+      savePersisted();
+      renderStatsOnly();
+    }
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
 
   function statMeta(key) {
     for (const g of cfg.statGroups) {
@@ -1052,7 +1107,7 @@ function createCompareTab(cfg) {
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
-            ${state.customizing ? `<span class="stat-drag-handle" draggable="true" title="Drag to reorder">⠿</span>` : ''}
+            ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
             <span class="stat-label" data-action="pick">${meta.label}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
@@ -1087,42 +1142,15 @@ function createCompareTab(cfg) {
       });
 
       const handle = row.querySelector('.stat-drag-handle');
-      handle?.addEventListener('dragstart', (e) => {
+      handle?.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        try { handle.setPointerCapture(e.pointerId); } catch {}
         draggedKey = key;
-        e.dataTransfer.effectAllowed = 'move';
+        dragPointerId = e.pointerId;
+        dragTarget = null;
         row.classList.add('dragging');
-      });
-      handle?.addEventListener('dragend', () => {
-        draggedKey = null;
-        statsCard.querySelectorAll('.stat-row').forEach(r =>
-          r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
-      });
-      row.addEventListener('dragover', (e) => {
-        if (!draggedKey || draggedKey === key) return;
-        e.preventDefault();
-        const rect = row.getBoundingClientRect();
-        const isAfter = (e.clientY - rect.top) > rect.height / 2;
-        row.classList.toggle('drag-over-top', !isAfter);
-        row.classList.toggle('drag-over-bottom', isAfter);
-      });
-      row.addEventListener('dragleave', () => {
-        row.classList.remove('drag-over-top', 'drag-over-bottom');
-      });
-      row.addEventListener('drop', (e) => {
-        e.preventDefault();
-        const isAfter = row.classList.contains('drag-over-bottom');
-        row.classList.remove('drag-over-top', 'drag-over-bottom');
-        if (!draggedKey || draggedKey === key) return;
-        const keys = state.statKeys;
-        const fromIdx = keys.indexOf(draggedKey);
-        if (fromIdx === -1) return;
-        keys.splice(fromIdx, 1);
-        let toIdx = keys.indexOf(key);
-        if (isAfter) toIdx += 1;
-        keys.splice(toIdx, 0, draggedKey);
-        draggedKey = null;
-        savePersisted();
-        renderStatsOnly();
+        document.body.style.userSelect = 'none';
       });
     });
     const addBtn = document.getElementById(cfg.ids.addBtn);
