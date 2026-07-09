@@ -153,6 +153,12 @@
     .bar-track.a { justify-content: flex-end; }
     .bar-track.b { justify-content: flex-start; }
     .bar-fill { height: 100%; border-radius: 3px; min-width: 2px; transition: width 0.35s ease, background-color 0.35s ease; }
+    .bar-value-label {
+      position: absolute; top: 50%; transform: translate(-50%, -50%);
+      font-size: 0.6rem; font-weight: 700; color: #1a1a1a; white-space: nowrap;
+      pointer-events: none; text-shadow: 0 0 3px #fff, 0 0 3px #fff, 0 0 2px #fff;
+      z-index: 1;
+    }
     .bar-fill.unqualified {
       opacity: 0.5;
       background-image: repeating-linear-gradient(135deg, rgba(255,255,255,0.65) 0 3px, transparent 3px 7px);
@@ -558,6 +564,15 @@ function formatStat(v, key) {
 }
 
 function sampleFloorLabel(statType) { return statType === 'bat' ? '100 PA' : '20 IP'; }
+
+// Tracked-swing / pitch-velocity metrics stabilize within a handful of swings
+// or pitches, so the small-sample "unqualified" hatching doesn't apply to
+// them even for a player under the overall PA/IP floor.
+const ALWAYS_QUALIFIED_KEYS = new Set([
+  'SprintSpeed', 'BatSpeed',
+  'pfxvFA', 'pfxvFT', 'pfxvFC', 'pfxvFS', 'pfxvFO', 'pfxvSI', 'pfxvSL',
+  'pfxvCU', 'pfxvKC', 'pfxvEP', 'pfxvCH', 'pfxvSC', 'pfxvKN',
+]);
 
 // ─── Percentile computation ─────────────────────────────────────────────────
 // Builds a ranker over a (already sample-filtered) reference distribution that
@@ -1012,18 +1027,24 @@ function createCompareTab(cfg) {
       const colorB = pctB != null ? percentileColor(pctB) : '#e8e4de';
       const widthA = pctA != null ? Math.max(pctA, 3) : 0;
       const widthB = pctB != null ? Math.max(pctB, 3) : 0;
-      const unqualA = pctA != null && !pA.qualified;
-      const unqualB = pctB != null && !pB.qualified;
+      const exempt = ALWAYS_QUALIFIED_KEYS.has(meta.key);
+      const unqualA = pctA != null && !pA.qualified && !exempt;
+      const unqualB = pctB != null && !pB.qualified && !exempt;
+      const isCounting = COUNTING_KEYS.has(meta.key);
+      const labelA = pctA == null ? '' : (isCounting ? (fa ?? '') : String(Math.round(pctA)));
+      const labelB = pctB == null ? '' : (isCounting ? (fb ?? '') : String(Math.round(pctB)));
+      const centerA = 100 - widthA / 2;
+      const centerB = widthB / 2;
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
-          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div></div>
+          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             <span class="stat-label" data-action="pick">${meta.label}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
-          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div></div>
+          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
