@@ -98,8 +98,8 @@
     .reset-link.visible { display: inline-block; }
 
     .customize-footer {
-      display: flex; justify-content: center; align-items: center; gap: 10px;
-      margin-top: 14px; padding-top: 14px; border-top: 1px solid #ede9e4;
+      display: flex; justify-content: flex-start; align-items: center; gap: 10px;
+      margin-top: 12px;
     }
 
     /* Player header cards */
@@ -297,10 +297,10 @@
           <div class="player-head side-b" id="hit-head-b"></div>
         </div>
         <div id="hit-stats-card"></div>
-        <div class="customize-footer">
-          <button class="reset-link" id="hit-reset-btn">Reset to default</button>
-          <button class="btn" id="hit-customize-btn">Customize</button>
-        </div>
+      </div>
+      <div class="customize-footer">
+        <button class="btn" id="hit-customize-btn">Customize</button>
+        <button class="reset-link" id="hit-reset-btn">Reset to default</button>
       </div>
     </div>
   </div>
@@ -347,10 +347,10 @@
           <div class="player-head side-b" id="pit-head-b"></div>
         </div>
         <div id="pit-stats-card"></div>
-        <div class="customize-footer">
-          <button class="reset-link" id="pit-reset-btn">Reset to default</button>
-          <button class="btn" id="pit-customize-btn">Customize</button>
-        </div>
+      </div>
+      <div class="customize-footer">
+        <button class="btn" id="pit-customize-btn">Customize</button>
+        <button class="reset-link" id="pit-reset-btn">Reset to default</button>
       </div>
     </div>
   </div>
@@ -1106,9 +1106,8 @@ function createCompareTab(cfg) {
       const exempt = ALWAYS_QUALIFIED_KEYS.has(meta.key);
       const unqualA = pctA != null && !pA.qualified && !exempt;
       const unqualB = pctB != null && !pB.qualified && !exempt;
-      const isCounting = COUNTING_KEYS.has(meta.key);
-      const labelA = pctA == null ? '' : (isCounting ? (fa ?? '') : String(Math.round(pctA)));
-      const labelB = pctB == null ? '' : (isCounting ? (fb ?? '') : String(Math.round(pctB)));
+      const labelA = pctA == null ? '' : String(Math.round(pctA));
+      const labelB = pctB == null ? '' : String(Math.round(pctB));
       const centerA = 100 - widthA / 2;
       const centerB = widthB / 2;
 
