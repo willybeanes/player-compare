@@ -398,6 +398,8 @@ function getSplitOptions(year) {
     { key: 'last7',  label: 'Last 7 Days',  params: { month: '1000', startdate: daysAgo(7),  enddate: today }, currentOnly: true },
     { key: 'last14', label: 'Last 14 Days', params: { month: '1000', startdate: daysAgo(14), enddate: today }, currentOnly: true },
     { key: 'last30', label: 'Last 30 Days', params: { month: '1000', startdate: daysAgo(30), enddate: today }, currentOnly: true },
+    { key: 'last60', label: 'Last 60 Days', params: { month: '1000', startdate: daysAgo(60), enddate: today }, currentOnly: true },
+    { key: 'last90', label: 'Last 90 Days', params: { month: '1000', startdate: daysAgo(90), enddate: today }, currentOnly: true },
     { key: 'marapr', label: 'March/April', params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-05-01` }, startMonth: 4 },
     { key: 'may',    label: 'May',         params: { month: '5' }, startMonth: 5 },
     { key: 'june',   label: 'June',        params: { month: '6' }, startMonth: 6 },
