@@ -130,6 +130,7 @@
 
     .stat-label-wrap { display: flex; align-items: center; justify-content: center; gap: 4px; padding: 0 2px; }
     .stat-label { text-align: center; font-size: 0.72rem; font-weight: 600; color: #555; letter-spacing: -0.01em; }
+    .stat-label-note { color: #c9a97a; cursor: help; font-weight: 700; }
     .stat-row.editable .stat-label {
       cursor: pointer; border-bottom: 1px dashed #bbb; padding-bottom: 1px;
     }
@@ -278,6 +279,10 @@
           <div class="field-label">Season</div>
           <select id="hit-year-select" class="year-select"></select>
         </div>
+        <div>
+          <div class="field-label">Split</div>
+          <select id="hit-split-select" class="year-select"></select>
+        </div>
       </div>
     </div>
 
@@ -328,6 +333,10 @@
           <div class="field-label">Season</div>
           <select id="pit-year-select" class="year-select"></select>
         </div>
+        <div>
+          <div class="field-label">Split</div>
+          <select id="pit-split-select" class="year-select"></select>
+        </div>
       </div>
     </div>
 
@@ -358,7 +367,8 @@
 </div>
 
 <footer>
-  Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against hitters with 100+ PA / pitchers with 20+ IP in the selected season.
+  Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against hitters with 100+ PA / pitchers with 20+ IP in the selected window.
+  Bat Speed, Sprint Speed, and other Baseball Savant metrics (marked with •) always reflect the full season regardless of split.
 </footer>
 
 <script>
@@ -367,6 +377,52 @@ const CURRENT_YEAR = 2026;
 const YEARS = Array.from({ length: CURRENT_YEAR - 2001 }, (_, i) => CURRENT_YEAR - i);
 const URL_PARAMS = new URLSearchParams(window.location.search);
 const tabControllers = {}; // tabName ('hitter'|'pitcher') -> { getShareState() }
+
+// ─── Splits ──────────────────────────────────────────────────────────────────
+// FanGraphs' leaderboard API supports date ranges natively via month=1000 plus
+// startdate/enddate (or specific calendar-month codes for May–Sept/Oct). This
+// mirrors fg-scatter's already-battle-tested getFGSplitParams mapping.
+function getSplitOptions(year) {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth() + 1; // 1–12
+  const isCurrent = year === currentYear;
+  const isPast = year < currentYear;
+  const yr = String(year);
+  const fmt = d => d.toISOString().slice(0, 10);
+  const daysAgo = n => { const d = new Date(); d.setDate(d.getDate() - n); return fmt(d); };
+  const today = fmt(now);
+
+  const all = [
+    { key: 'season', label: 'Full Season', params: { month: '0' } },
+    { key: 'last7',  label: 'Last 7 Days',  params: { month: '1000', startdate: daysAgo(7),  enddate: today }, currentOnly: true },
+    { key: 'last14', label: 'Last 14 Days', params: { month: '1000', startdate: daysAgo(14), enddate: today }, currentOnly: true },
+    { key: 'last30', label: 'Last 30 Days', params: { month: '1000', startdate: daysAgo(30), enddate: today }, currentOnly: true },
+    { key: 'marapr', label: 'March/April', params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-05-01` }, startMonth: 4 },
+    { key: 'may',    label: 'May',         params: { month: '5' }, startMonth: 5 },
+    { key: 'june',   label: 'June',        params: { month: '6' }, startMonth: 6 },
+    { key: 'july',   label: 'July',        params: { month: '7' }, startMonth: 7 },
+    { key: 'august', label: 'August',      params: { month: '8' }, startMonth: 8 },
+    { key: 'sepoct', label: 'Sept/Oct',    params: { month: '9' }, startMonth: 9 },
+    { key: 'h1',     label: 'First Half',  params: { month: '1000', startdate: `${yr}-03-01`, enddate: `${yr}-07-12` }, startMonth: 4 },
+    { key: 'h2',     label: 'Second Half', params: { month: '1000', startdate: `${yr}-07-12`, enddate: `${yr}-11-01` }, startMonth: 7 },
+  ];
+
+  return all.filter(o => {
+    if (o.key === 'season') return true;
+    if (o.currentOnly) return isCurrent; // "last N days" only makes sense mid-season
+    if (isPast) return true;             // past seasons: every window already happened
+    if (isCurrent) return currentMonth >= o.startMonth;
+    return false;
+  });
+}
+
+// Stats sourced from Baseball Savant (bat-tracking, sprint speed) rather than
+// FanGraphs — Savant's leaderboards don't support date-range filtering, so
+// these always reflect the full season regardless of the selected split.
+const SAVANT_SUPPLEMENTAL_KEYS = new Set([
+  'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed',
+]);
 
 // Rebuilds the URL query string from the *active* tab's player/season selections
 // only — switching tabs replaces the URL rather than accumulating both tabs'
@@ -380,6 +436,7 @@ function updateURL() {
   if (ctrl) {
     const s = ctrl.getShareState();
     if (s.year) params.set('year', String(s.year));
+    if (s.split && s.split !== 'season') params.set('split', s.split);
     if (s.a) params.set('a', s.a);
     if (s.b) params.set('b', s.b);
   }
@@ -575,7 +632,8 @@ function formatStat(v, key) {
   if (v == null || isNaN(v)) return null;
   if (SLASH_KEYS.has(key)) {
     const s = v.toFixed(3);
-    return v < 0 ? '-' + s.slice(3).replace('-', '') : s.slice(1);
+    if (v < 0) return '-' + s.slice(3).replace('-', '');
+    return s.startsWith('0.') ? s.slice(1) : s; // strip leading 0 (.333) but keep it when >= 1 (1.091 — OPS can exceed 1.000 in short windows)
   }
   if (PCT_KEYS.has(key)) return (v * 100).toFixed(1) + '%';
   if (['ERA','FIP','xFIP','SIERA','xERA','WHIP','HR/9','BB/9','K/9','H/9','K/BB','GB/FB','Spd','BB/K'].includes(key)) return v.toFixed(2);
@@ -677,7 +735,17 @@ function csvNum(v) {
 }
 
 // Baseball Savant's bat-tracking leaderboard — supplemental to FanGraphs, keyed by MLBAM id.
+// Always full-season (Savant's leaderboards don't support date-range filtering),
+// so this is cached by year alone and reused across every split.
+const batTrackingCache = new Map(); // `${year}:${savantType}` -> Map<mlbId, fields>
 async function loadBatTracking(year, savantType) {
+  const cacheKey = `${year}:${savantType}`;
+  if (batTrackingCache.has(cacheKey)) return batTrackingCache.get(cacheKey);
+  const result = await loadBatTrackingUncached(year, savantType);
+  batTrackingCache.set(cacheKey, result);
+  return result;
+}
+async function loadBatTrackingUncached(year, savantType) {
   const params = new URLSearchParams({
     path: '/leaderboard/bat-tracking', gameType: 'Regular', minSwings: '1', minGroupSwings: '1',
     seasonStart: String(year), seasonEnd: String(year), type: savantType, team: '', csv: 'true',
@@ -706,8 +774,16 @@ async function loadBatTracking(year, savantType) {
 }
 
 // Baseball Savant's Sprint Speed (Statcast-measured ft/sec) — supplemental to
-// FanGraphs, keyed by MLBAM id. Hitters only.
+// FanGraphs, keyed by MLBAM id. Hitters only. Always full-season; cached by
+// year alone and reused across every split.
+const sprintSpeedCache = new Map(); // year -> Map<mlbId, fields>
 async function loadSprintSpeed(year) {
+  if (sprintSpeedCache.has(year)) return sprintSpeedCache.get(year);
+  const result = await loadSprintSpeedUncached(year);
+  sprintSpeedCache.set(year, result);
+  return result;
+}
+async function loadSprintSpeedUncached(year) {
   const params = new URLSearchParams({
     path: '/leaderboard/custom', type: 'batter', year: String(year), filter: '', min: '1',
     selections: 'pa,sprint_speed', chart: 'false', x: 'pa', y: 'pa', r: 'no', chartType: 'beeswarm', csv: 'true',
@@ -727,17 +803,18 @@ async function loadSprintSpeed(year) {
 }
 
 // ─── Data loading ────────────────────────────────────────────────────────────
-const leaderboardCache = new Map(); // `${year}:${statType}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
+const leaderboardCache = new Map(); // `${year}:${statType}:${splitKey}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
 
-async function loadLeaderboard(year, statType, statGroups) {
-  const cacheKey = `${year}:${statType}`;
+async function loadLeaderboard(year, statType, statGroups, split) {
+  const cacheKey = `${year}:${statType}:${split.key}`;
   if (leaderboardCache.has(cacheKey)) return leaderboardCache.get(cacheKey);
 
   const params = new URLSearchParams({
     pos: 'all', stats: statType, lg: 'all', qual: '0', type: '4',
-    season: String(year), season1: String(year), month: '0', ind: '0', hand: '', team: '0',
+    season: String(year), season1: String(year), ind: '0', hand: '', team: '0',
     pageitems: '10000', pagenum: '1', sortstat: 'WAR', sortdir: 'default',
   });
+  for (const [k, v] of Object.entries(split.params)) params.set(k, v);
   const savantType = statType === 'bat' ? 'batter' : 'pitcher';
   const [resp, batTracking, sprintSpeed] = await Promise.all([
     fetch(`${FG_PROXY}?${params}`),
@@ -954,6 +1031,7 @@ function createCompareTab(cfg) {
   function savePersisted() {
     localStorage.setItem(cfg.storageKey, JSON.stringify({
       year: state.year,
+      splitKey: state.splitKey,
       playerAName: state.playerAName,
       playerBName: state.playerBName,
       statKeys: state.statKeys,
@@ -966,26 +1044,36 @@ function createCompareTab(cfg) {
   // The metric list is never read from or written to the URL.
   const urlAppliesHere = URL_PARAMS.get('tab') === cfg.tabName;
   const urlYear = urlAppliesHere ? parseInt(URL_PARAMS.get('year'), 10) : NaN;
+  const urlSplit = urlAppliesHere ? URL_PARAMS.get('split') : null;
   const urlA = urlAppliesHere ? URL_PARAMS.get('a') : null;
   const urlB = urlAppliesHere ? URL_PARAMS.get('b') : null;
 
   const state = {
     year: (!isNaN(urlYear) && YEARS.includes(urlYear)) ? urlYear
         : (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
+    splitKey: urlSplit || persisted.splitKey || 'season',
     playerA: null, playerB: null,
     playerAName: urlA || persisted.playerAName || null,
     playerBName: urlB || persisted.playerBName || null,
     statKeys: (Array.isArray(persisted.statKeys) && persisted.statKeys.length) ? persisted.statKeys : [...cfg.defaultKeys],
     customizing: false,
   };
+  // Validate the split against what's actually available for this year (e.g.
+  // "Last 7 Days" only exists for the current season).
+  if (!getSplitOptions(state.year).some(o => o.key === state.splitKey)) state.splitKey = 'season';
+
   let current = null; // { lb, pA, pB }
   let draggedKey = null;
   let dragPointerId = null;
   let dragTarget = null; // { key, isAfter }
 
+  function getCurrentSplit() {
+    return getSplitOptions(state.year).find(o => o.key === state.splitKey) || getSplitOptions(state.year)[0];
+  }
+
   function syncURL() { updateURL(); }
   tabControllers[cfg.tabName] = {
-    getShareState: () => ({ year: state.year, a: state.playerAName, b: state.playerBName }),
+    getShareState: () => ({ year: state.year, split: state.splitKey, a: state.playerAName, b: state.playerBName }),
   };
 
   // Pointer-events based drag reordering (works for mouse, touch, and pen —
@@ -1047,14 +1135,14 @@ function createCompareTab(cfg) {
   }
 
   function getPlayersForYear() {
-    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
+    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}:${state.splitKey}`);
     return lb ? [...lb.players.values()] : [];
   }
 
   async function render() {
     setLoading(true, false);
     try {
-      const lb = await loadLeaderboard(state.year, cfg.statType, cfg.statGroups);
+      const lb = await loadLeaderboard(state.year, cfg.statType, cfg.statGroups, getCurrentSplit());
       let pA = state.playerA ? lb.players.get(state.playerA) : null;
       let pB = state.playerB ? lb.players.get(state.playerB) : null;
       if (!pA || !pB) {
@@ -1110,6 +1198,8 @@ function createCompareTab(cfg) {
       const labelB = pctB == null ? '' : String(Math.round(pctB));
       const centerA = 100 - widthA / 2;
       const centerB = widthB / 2;
+      const splitNote = (state.splitKey !== 'season' && SAVANT_SUPPLEMENTAL_KEYS.has(meta.key))
+        ? ` <span class="stat-label-note" title="Full season — Baseball Savant does not support date-range filtering">•</span>` : '';
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
@@ -1117,7 +1207,7 @@ function createCompareTab(cfg) {
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
-            <span class="stat-label" data-action="pick">${meta.label}</span>
+            <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
           <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
@@ -1193,11 +1283,26 @@ function createCompareTab(cfg) {
     [state.playerAName, state.playerBName] = [state.playerBName, state.playerAName];
     savePersisted();
     syncURL();
-    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
+    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}:${state.splitKey}`);
     if (lb) {
       aDropdown.setValueSilently(lb.players.get(state.playerA));
       bDropdown.setValueSilently(lb.players.get(state.playerB));
     }
+    render();
+  });
+
+  const splitSelect = el(cfg.ids.splitSelect);
+  function populateSplitSelect() {
+    const opts = getSplitOptions(state.year);
+    if (!opts.some(o => o.key === state.splitKey)) state.splitKey = 'season';
+    splitSelect.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+    splitSelect.value = state.splitKey;
+  }
+  populateSplitSelect();
+  splitSelect.addEventListener('change', () => {
+    state.splitKey = splitSelect.value;
+    savePersisted();
+    syncURL();
     render();
   });
 
@@ -1207,6 +1312,7 @@ function createCompareTab(cfg) {
     state.year = parseInt(yearSelect.value, 10);
     state.playerA = null;
     state.playerB = null;
+    populateSplitSelect();
     savePersisted();
     syncURL();
     render();
@@ -1226,7 +1332,7 @@ createCompareTab({
   ids: {
     aInput: 'hit-a-search', aDropdown: 'hit-a-dropdown',
     bInput: 'hit-b-search', bDropdown: 'hit-b-dropdown',
-    swapBtn: 'hit-swap-btn', yearSelect: 'hit-year-select',
+    swapBtn: 'hit-swap-btn', yearSelect: 'hit-year-select', splitSelect: 'hit-split-select',
     customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn',
     headA: 'hit-head-a', headB: 'hit-head-b', statsCard: 'hit-stats-card',
     loading: 'hit-loading', error: 'hit-error', content: 'hit-content',
@@ -1244,7 +1350,7 @@ createCompareTab({
   ids: {
     aInput: 'pit-a-search', aDropdown: 'pit-a-dropdown',
     bInput: 'pit-b-search', bDropdown: 'pit-b-dropdown',
-    swapBtn: 'pit-swap-btn', yearSelect: 'pit-year-select',
+    swapBtn: 'pit-swap-btn', yearSelect: 'pit-year-select', splitSelect: 'pit-split-select',
     customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn',
     headA: 'pit-head-a', headB: 'pit-head-b', statsCard: 'pit-stats-card',
     loading: 'pit-loading', error: 'pit-error', content: 'pit-content',
