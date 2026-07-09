@@ -322,7 +322,7 @@
 </div>
 
 <footer>
-  Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against all hitters/pitchers with a plate appearance or batter faced in the selected season.
+  Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against hitters with 100+ PA / pitchers with 20+ IP in the selected season.
 </footer>
 
 <script>
@@ -690,11 +690,19 @@ async function loadLeaderboard(year, statType, statGroups) {
     });
   }
 
+  // Percentiles are ranked against a "meaningful sample" subset, not the full
+  // qual=0 pool — that pool is ~70% players with under 100 PA (September
+  // call-ups, injury replacements, position players who once pitched), and
+  // counting/rate stats look artificially elite against a sea of near-zero
+  // samples. The two compared players themselves are shown regardless of
+  // whether they personally clear this bar.
+  const sampleFloor = statType === 'bat' ? { key: 'PA', min: 100 } : { key: 'IP', min: 20 };
   const allKeys = new Set(statGroups.flatMap(g => g.stats.map(s => s.key)));
   const percentiles = new Map();
   for (const key of allKeys) {
     const entries = [];
     for (const p of players.values()) {
+      if ((rawValue(p.raw[sampleFloor.key], sampleFloor.key) ?? 0) < sampleFloor.min) continue;
       const v = rawValue(p.raw[key], key);
       if (v != null && !isNaN(v)) entries.push({ id: p.id, value: v });
     }
