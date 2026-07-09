@@ -329,6 +329,24 @@
 // ─── Constants ───────────────────────────────────────────────────────────────
 const CURRENT_YEAR = 2026;
 const YEARS = Array.from({ length: CURRENT_YEAR - 2001 }, (_, i) => CURRENT_YEAR - i);
+const URL_PARAMS = new URLSearchParams(window.location.search);
+const tabControllers = {}; // urlPrefix -> { getShareState() }
+
+// Rebuilds the URL query string from each tab's player/season selections.
+// Deliberately excludes customized metric lists — those are local-only.
+function updateURL() {
+  const params = new URLSearchParams();
+  const activeBtn = document.querySelector('.tab-btn.active');
+  params.set('tab', activeBtn ? activeBtn.dataset.tab : 'hitter');
+  for (const [prefix, ctrl] of Object.entries(tabControllers)) {
+    const s = ctrl.getShareState();
+    if (s.year) params.set(`${prefix}Year`, String(s.year));
+    if (s.a) params.set(`${prefix}A`, s.a);
+    if (s.b) params.set(`${prefix}B`, s.b);
+  }
+  const qs = params.toString();
+  history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+}
 const FG_PROXY = 'https://fg-proxy.vercel.app/api/fangraphs';
 const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
 
@@ -846,15 +864,29 @@ function createCompareTab(cfg) {
     }));
   }
 
+  // URL params (if present, from a shared link) take priority over locally
+  // persisted values; the metric list is never read from or written to the URL.
+  const urlYear = cfg.urlPrefix ? parseInt(URL_PARAMS.get(`${cfg.urlPrefix}Year`), 10) : NaN;
+  const urlA = cfg.urlPrefix ? URL_PARAMS.get(`${cfg.urlPrefix}A`) : null;
+  const urlB = cfg.urlPrefix ? URL_PARAMS.get(`${cfg.urlPrefix}B`) : null;
+
   const state = {
-    year: (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
+    year: (!isNaN(urlYear) && YEARS.includes(urlYear)) ? urlYear
+        : (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
     playerA: null, playerB: null,
-    playerAName: persisted.playerAName || null,
-    playerBName: persisted.playerBName || null,
+    playerAName: urlA || persisted.playerAName || null,
+    playerBName: urlB || persisted.playerBName || null,
     statKeys: (Array.isArray(persisted.statKeys) && persisted.statKeys.length) ? persisted.statKeys : [...cfg.defaultKeys],
     customizing: false,
   };
   let current = null; // { lb, pA, pB }
+
+  function syncURL() { updateURL(); }
+  if (cfg.urlPrefix) {
+    tabControllers[cfg.urlPrefix] = {
+      getShareState: () => ({ year: state.year, a: state.playerAName, b: state.playerBName }),
+    };
+  }
 
   function statMeta(key) {
     for (const g of cfg.statGroups) {
@@ -893,6 +925,7 @@ function createCompareTab(cfg) {
         aDropdown.setValueSilently(pA);
         bDropdown.setValueSilently(pB);
         savePersisted();
+        syncURL();
       }
       current = { lb, pA, pB };
       renderPlayerHead(headA, pA);
@@ -988,13 +1021,14 @@ function createCompareTab(cfg) {
     renderStatsOnly();
   });
 
-  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); render(); }, getPlayersForYear);
-  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); render(); }, getPlayersForYear);
+  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForYear);
+  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForYear);
 
   el(cfg.ids.swapBtn).addEventListener('click', () => {
     [state.playerA, state.playerB] = [state.playerB, state.playerA];
     [state.playerAName, state.playerBName] = [state.playerBName, state.playerAName];
     savePersisted();
+    syncURL();
     const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
     if (lb) {
       aDropdown.setValueSilently(lb.players.get(state.playerA));
@@ -1010,6 +1044,7 @@ function createCompareTab(cfg) {
     state.playerA = null;
     state.playerB = null;
     savePersisted();
+    syncURL();
     render();
   });
 
@@ -1018,6 +1053,7 @@ function createCompareTab(cfg) {
 
 createCompareTab({
   statType: 'bat',
+  urlPrefix: 'hit',
   statGroups: STAT_GROUPS_HITTING,
   defaultKeys: DEFAULT_HITTER_KEYS,
   storageKey: 'player-compare:hitterStats',
@@ -1035,6 +1071,7 @@ createCompareTab({
 
 createCompareTab({
   statType: 'pit',
+  urlPrefix: 'pit',
   statGroups: STAT_GROUPS_PITCHING,
   defaultKeys: DEFAULT_PITCHER_KEYS,
   storageKey: 'player-compare:pitcherStats',
@@ -1061,11 +1098,16 @@ function activateTab(tab) {
 }
 
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
+  btn.addEventListener('click', () => { activateTab(btn.dataset.tab); updateURL(); });
 });
 
-const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
-if (savedTab === 'hitter' || savedTab === 'pitcher') activateTab(savedTab);
+const urlTab = URL_PARAMS.get('tab');
+if (urlTab === 'hitter' || urlTab === 'pitcher') {
+  activateTab(urlTab);
+} else {
+  const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
+  if (savedTab === 'hitter' || savedTab === 'pitcher') activateTab(savedTab);
+}
 </script>
 </body>
 </html>
