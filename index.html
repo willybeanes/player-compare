@@ -330,19 +330,22 @@
 const CURRENT_YEAR = 2026;
 const YEARS = Array.from({ length: CURRENT_YEAR - 2001 }, (_, i) => CURRENT_YEAR - i);
 const URL_PARAMS = new URLSearchParams(window.location.search);
-const tabControllers = {}; // urlPrefix -> { getShareState() }
+const tabControllers = {}; // tabName ('hitter'|'pitcher') -> { getShareState() }
 
-// Rebuilds the URL query string from each tab's player/season selections.
-// Deliberately excludes customized metric lists — those are local-only.
+// Rebuilds the URL query string from the *active* tab's player/season selections
+// only — switching tabs replaces the URL rather than accumulating both tabs'
+// state. Deliberately excludes customized metric lists — those are local-only.
 function updateURL() {
-  const params = new URLSearchParams();
   const activeBtn = document.querySelector('.tab-btn.active');
-  params.set('tab', activeBtn ? activeBtn.dataset.tab : 'hitter');
-  for (const [prefix, ctrl] of Object.entries(tabControllers)) {
+  const activeTab = activeBtn ? activeBtn.dataset.tab : 'hitter';
+  const params = new URLSearchParams();
+  params.set('tab', activeTab);
+  const ctrl = tabControllers[activeTab];
+  if (ctrl) {
     const s = ctrl.getShareState();
-    if (s.year) params.set(`${prefix}Year`, String(s.year));
-    if (s.a) params.set(`${prefix}A`, s.a);
-    if (s.b) params.set(`${prefix}B`, s.b);
+    if (s.year) params.set('year', String(s.year));
+    if (s.a) params.set('a', s.a);
+    if (s.b) params.set('b', s.b);
   }
   const qs = params.toString();
   history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
@@ -865,10 +868,13 @@ function createCompareTab(cfg) {
   }
 
   // URL params (if present, from a shared link) take priority over locally
-  // persisted values; the metric list is never read from or written to the URL.
-  const urlYear = cfg.urlPrefix ? parseInt(URL_PARAMS.get(`${cfg.urlPrefix}Year`), 10) : NaN;
-  const urlA = cfg.urlPrefix ? URL_PARAMS.get(`${cfg.urlPrefix}A`) : null;
-  const urlB = cfg.urlPrefix ? URL_PARAMS.get(`${cfg.urlPrefix}B`) : null;
+  // persisted values, but only when the URL's `tab` points at this tab —
+  // otherwise the params belong to the other tab and are ignored here.
+  // The metric list is never read from or written to the URL.
+  const urlAppliesHere = URL_PARAMS.get('tab') === cfg.tabName;
+  const urlYear = urlAppliesHere ? parseInt(URL_PARAMS.get('year'), 10) : NaN;
+  const urlA = urlAppliesHere ? URL_PARAMS.get('a') : null;
+  const urlB = urlAppliesHere ? URL_PARAMS.get('b') : null;
 
   const state = {
     year: (!isNaN(urlYear) && YEARS.includes(urlYear)) ? urlYear
@@ -882,11 +888,9 @@ function createCompareTab(cfg) {
   let current = null; // { lb, pA, pB }
 
   function syncURL() { updateURL(); }
-  if (cfg.urlPrefix) {
-    tabControllers[cfg.urlPrefix] = {
-      getShareState: () => ({ year: state.year, a: state.playerAName, b: state.playerBName }),
-    };
-  }
+  tabControllers[cfg.tabName] = {
+    getShareState: () => ({ year: state.year, a: state.playerAName, b: state.playerBName }),
+  };
 
   function statMeta(key) {
     for (const g of cfg.statGroups) {
@@ -1053,7 +1057,7 @@ function createCompareTab(cfg) {
 
 createCompareTab({
   statType: 'bat',
-  urlPrefix: 'hit',
+  tabName: 'hitter',
   statGroups: STAT_GROUPS_HITTING,
   defaultKeys: DEFAULT_HITTER_KEYS,
   storageKey: 'player-compare:hitterStats',
@@ -1071,7 +1075,7 @@ createCompareTab({
 
 createCompareTab({
   statType: 'pit',
-  urlPrefix: 'pit',
+  tabName: 'pitcher',
   statGroups: STAT_GROUPS_PITCHING,
   defaultKeys: DEFAULT_PITCHER_KEYS,
   storageKey: 'player-compare:pitcherStats',
