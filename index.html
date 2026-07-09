@@ -97,6 +97,11 @@
     .reset-link:hover { color: #c44820; }
     .reset-link.visible { display: inline-block; }
 
+    .customize-footer {
+      display: flex; justify-content: center; align-items: center; gap: 10px;
+      margin-top: 14px; padding-top: 14px; border-top: 1px solid #ede9e4;
+    }
+
     /* Player header cards */
     .player-heads {
       display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px;
@@ -273,8 +278,6 @@
           <div class="field-label">Season</div>
           <select id="hit-year-select" class="year-select"></select>
         </div>
-        <button class="reset-link" id="hit-reset-btn">Reset to default</button>
-        <button class="btn" id="hit-customize-btn">Customize</button>
       </div>
     </div>
 
@@ -294,6 +297,10 @@
           <div class="player-head side-b" id="hit-head-b"></div>
         </div>
         <div id="hit-stats-card"></div>
+        <div class="customize-footer">
+          <button class="reset-link" id="hit-reset-btn">Reset to default</button>
+          <button class="btn" id="hit-customize-btn">Customize</button>
+        </div>
       </div>
     </div>
   </div>
@@ -321,8 +328,6 @@
           <div class="field-label">Season</div>
           <select id="pit-year-select" class="year-select"></select>
         </div>
-        <button class="reset-link" id="pit-reset-btn">Reset to default</button>
-        <button class="btn" id="pit-customize-btn">Customize</button>
       </div>
     </div>
 
@@ -342,6 +347,10 @@
           <div class="player-head side-b" id="pit-head-b"></div>
         </div>
         <div id="pit-stats-card"></div>
+        <div class="customize-footer">
+          <button class="reset-link" id="pit-reset-btn">Reset to default</button>
+          <button class="btn" id="pit-customize-btn">Customize</button>
+        </div>
       </div>
     </div>
   </div>
