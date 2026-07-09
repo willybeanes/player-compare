@@ -552,21 +552,27 @@ function formatStat(v, key) {
 }
 
 // ─── Percentile computation ─────────────────────────────────────────────────
-function computePercentiles(entries) {
-  const valid = entries.filter(e => e.value != null && !isNaN(e.value));
-  const sorted = valid.slice().sort((a, b) => a.value - b.value);
+// Builds a ranker over a (already sample-filtered) reference distribution that
+// can score ANY value against it — including a value from a player who didn't
+// personally clear the sample-size filter used to build the reference set.
+function buildPercentileRanker(values) {
+  const sorted = values.filter(v => v != null && !isNaN(v)).sort((a, b) => a - b);
   const n = sorted.length;
-  const map = new Map();
-  let i = 0;
-  while (i < n) {
-    let j = i;
-    while (j < n && sorted[j].value === sorted[i].value) j++;
-    const avgIndex = (i + j - 1) / 2;
-    const pct = n === 1 ? 50 : (avgIndex / (n - 1)) * 100;
-    for (let k = i; k < j; k++) map.set(sorted[k].id, pct);
-    i = j;
-  }
-  return map;
+  return function rank(value) {
+    if (value == null || isNaN(value) || n === 0) return null;
+    if (n === 1) return 50;
+    // firstGE: index of first element >= value; firstGT: index of first element > value
+    let lo = 0, hi = n;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] < value) lo = mid + 1; else hi = mid; }
+    const firstGE = lo;
+    lo = 0; hi = n;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (sorted[mid] <= value) lo = mid + 1; else hi = mid; }
+    const firstGT = lo;
+    const countLess = firstGE;
+    const countEqualOrClamped = Math.max(firstGT - firstGE, 1); // value itself always counts once, even if absent from the set
+    const avgIndex = countLess + (countEqualOrClamped - 1) / 2;
+    return (avgIndex / (n - 1)) * 100;
+  };
 }
 
 function percentileColor(pct) {
@@ -698,15 +704,15 @@ async function loadLeaderboard(year, statType, statGroups) {
   // whether they personally clear this bar.
   const sampleFloor = statType === 'bat' ? { key: 'PA', min: 100 } : { key: 'IP', min: 20 };
   const allKeys = new Set(statGroups.flatMap(g => g.stats.map(s => s.key)));
-  const percentiles = new Map();
+  const percentiles = new Map(); // key -> rank(value) function
   for (const key of allKeys) {
-    const entries = [];
+    const values = [];
     for (const p of players.values()) {
       if ((rawValue(p.raw[sampleFloor.key], sampleFloor.key) ?? 0) < sampleFloor.min) continue;
       const v = rawValue(p.raw[key], key);
-      if (v != null && !isNaN(v)) entries.push({ id: p.id, value: v });
+      if (v != null && !isNaN(v)) values.push(v);
     }
-    percentiles.set(key, computePercentiles(entries));
+    percentiles.set(key, buildPercentileRanker(values));
   }
 
   const result = { players, percentiles };
@@ -958,9 +964,9 @@ function createCompareTab(cfg) {
       const meta = statMeta(key);
       const va = rawValue(pA.raw[meta.key], meta.key);
       const vb = rawValue(pB.raw[meta.key], meta.key);
-      const pctMap = lb.percentiles.get(meta.key);
-      let pctA = pctMap && pctMap.has(pA.id) ? pctMap.get(pA.id) : null;
-      let pctB = pctMap && pctMap.has(pB.id) ? pctMap.get(pB.id) : null;
+      const ranker = lb.percentiles.get(meta.key);
+      let pctA = ranker ? ranker(va) : null;
+      let pctB = ranker ? ranker(vb) : null;
       if (lowerIsBetter(meta.key, cfg.statType)) {
         if (pctA != null) pctA = 100 - pctA;
         if (pctB != null) pctB = 100 - pctB;
