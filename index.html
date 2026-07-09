@@ -829,16 +829,31 @@ function createCompareTab(cfg) {
   const statsCard = el(cfg.ids.statsCard);
   const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
 
-  function loadStatKeys() {
+  function loadPersisted() {
     try {
       const saved = JSON.parse(localStorage.getItem(cfg.storageKey));
-      if (Array.isArray(saved) && saved.length) return saved;
+      if (saved && typeof saved === 'object') return saved;
     } catch {}
-    return [...cfg.defaultKeys];
+    return {};
   }
-  function saveStatKeys() { localStorage.setItem(cfg.storageKey, JSON.stringify(state.statKeys)); }
+  const persisted = loadPersisted();
+  function savePersisted() {
+    localStorage.setItem(cfg.storageKey, JSON.stringify({
+      year: state.year,
+      playerAName: state.playerAName,
+      playerBName: state.playerBName,
+      statKeys: state.statKeys,
+    }));
+  }
 
-  const state = { year: CURRENT_YEAR, playerA: null, playerB: null, statKeys: loadStatKeys(), customizing: false };
+  const state = {
+    year: (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
+    playerA: null, playerB: null,
+    playerAName: persisted.playerAName || null,
+    playerBName: persisted.playerBName || null,
+    statKeys: (Array.isArray(persisted.statKeys) && persisted.statKeys.length) ? persisted.statKeys : [...cfg.defaultKeys],
+    customizing: false,
+  };
   let current = null; // { lb, pA, pB }
 
   function statMeta(key) {
@@ -868,13 +883,16 @@ function createCompareTab(cfg) {
       let pB = state.playerB ? lb.players.get(state.playerB) : null;
       if (!pA || !pB) {
         const list = [...lb.players.values()];
-        const findByName = (name) => list.find(p => p.name === name);
-        pA = pA || findByName(cfg.defaultA) || list[0];
-        pB = pB || findByName(cfg.defaultB) || list[1] || list[0];
+        const findByName = (name) => name ? list.find(p => p.name === name) : null;
+        pA = pA || findByName(state.playerAName) || findByName(cfg.defaultA) || list[0];
+        pB = pB || findByName(state.playerBName) || findByName(cfg.defaultB) || list[1] || list[0];
         state.playerA = pA.id;
         state.playerB = pB.id;
+        state.playerAName = pA.name;
+        state.playerBName = pB.name;
         aDropdown.setValueSilently(pA);
         bDropdown.setValueSilently(pB);
+        savePersisted();
       }
       current = { lb, pA, pB };
       renderPlayerHead(headA, pA);
@@ -935,14 +953,14 @@ function createCompareTab(cfg) {
         e.stopPropagation();
         if (state.statKeys.length <= 1) return;
         state.statKeys = state.statKeys.filter(k => k !== key);
-        saveStatKeys();
+        savePersisted();
         renderStatsOnly();
       });
       row.querySelector('[data-action="pick"]')?.addEventListener('click', (e) => {
         openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
           const idx = state.statKeys.indexOf(key);
           if (idx >= 0) state.statKeys[idx] = newKey;
-          saveStatKeys();
+          savePersisted();
           renderStatsOnly();
         });
       });
@@ -951,7 +969,7 @@ function createCompareTab(cfg) {
     addBtn?.addEventListener('click', (e) => {
       openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
         state.statKeys.push(newKey);
-        saveStatKeys();
+        savePersisted();
         renderStatsOnly();
       });
     });
@@ -966,15 +984,17 @@ function createCompareTab(cfg) {
   });
   resetBtn.addEventListener('click', () => {
     state.statKeys = [...cfg.defaultKeys];
-    saveStatKeys();
+    savePersisted();
     renderStatsOnly();
   });
 
-  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; render(); }, getPlayersForYear);
-  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; render(); }, getPlayersForYear);
+  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); render(); }, getPlayersForYear);
+  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); render(); }, getPlayersForYear);
 
   el(cfg.ids.swapBtn).addEventListener('click', () => {
     [state.playerA, state.playerB] = [state.playerB, state.playerA];
+    [state.playerAName, state.playerBName] = [state.playerBName, state.playerAName];
+    savePersisted();
     const lb = leaderboardCache.get(`${state.year}:${cfg.statType}`);
     if (lb) {
       aDropdown.setValueSilently(lb.players.get(state.playerA));
@@ -984,11 +1004,12 @@ function createCompareTab(cfg) {
   });
 
   yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
-  yearSelect.value = String(CURRENT_YEAR);
+  yearSelect.value = String(state.year);
   yearSelect.addEventListener('change', () => {
     state.year = parseInt(yearSelect.value, 10);
     state.playerA = null;
     state.playerB = null;
+    savePersisted();
     render();
   });
 
@@ -1030,14 +1051,21 @@ createCompareTab({
 });
 
 // ─── Tab switching ────────────────────────────────────────────────────────────
+const ACTIVE_TAB_KEY = 'player-compare:activeTab';
+
+function activateTab(tab) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.getElementById('tab-hitter').classList.toggle('active', tab === 'hitter');
+  document.getElementById('tab-pitcher').classList.toggle('active', tab === 'pitcher');
+  localStorage.setItem(ACTIVE_TAB_KEY, tab);
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b === btn));
-    const tab = btn.dataset.tab;
-    document.getElementById('tab-hitter').classList.toggle('active', tab === 'hitter');
-    document.getElementById('tab-pitcher').classList.toggle('active', tab === 'pitcher');
-  });
+  btn.addEventListener('click', () => activateTab(btn.dataset.tab));
 });
+
+const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
+if (savedTab === 'hitter' || savedTab === 'pitcher') activateTab(savedTab);
 </script>
 </body>
 </html>
