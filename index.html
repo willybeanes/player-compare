@@ -330,6 +330,7 @@
 const CURRENT_YEAR = 2026;
 const YEARS = Array.from({ length: CURRENT_YEAR - 2001 }, (_, i) => CURRENT_YEAR - i);
 const FG_PROXY = 'https://fg-proxy.vercel.app/api/fangraphs';
+const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
 
 const MLB_TEAM_IDS = {
   ATH:133, PIT:134, SDP:135, SEA:136, SFG:137, STL:138, TBR:139, TEX:140, TOR:141, MIN:142,
@@ -386,8 +387,13 @@ const STAT_GROUPS_HITTING = [
     { key: 'EV', label: 'EV' }, { key: 'EV90', label: 'EV90' }, { key: 'LA', label: 'LA' },
     { key: 'Barrel%', label: 'Barrel/BBE%' }, { key: 'Barrels', label: 'Barrels' },
     { key: 'HardHit%', label: 'HardHit%' }, { key: 'maxEV', label: 'maxEV' },
-    { key: 'FastSwing%', label: 'Fast Swing%' }, { key: 'Swords', label: 'Swords' },
     { key: 'AttackAngle', label: 'Attack Angle' },
+  ]},
+  { group: 'Bat Tracking', stats: [
+    { key: 'BatSpeed', label: 'Bat Speed' }, { key: 'FastSwing%', label: 'Fast Swing%' },
+    { key: 'Blasts/C', label: 'Blasts/C' }, { key: 'Blasts/Sw', label: 'Blasts/Sw' },
+    { key: 'SqUp/C', label: 'Sq-Up/C' }, { key: 'SqUp/Sw', label: 'Sq-Up/Sw' },
+    { key: 'SwingLen', label: 'Swing Len' }, { key: 'Swords', label: 'Swords' },
   ]},
   { group: 'Plus Stats', stats: [
     { key: 'AVG+', label: 'AVG+' }, { key: 'BB%+', label: 'BB%+' }, { key: 'K%+', label: 'K%+' },
@@ -432,7 +438,12 @@ const STAT_GROUPS_PITCHING = [
   { group: 'Quality of Contact (Against)', stats: [
     { key: 'Barrel%', label: 'Barrel/BBE%' }, { key: 'Barrels', label: 'Barrels' },
     { key: 'HardHit%', label: 'HardHit%' }, { key: 'EV', label: 'EV' }, { key: 'maxEV', label: 'maxEV' },
-    { key: 'FastSwing%', label: 'Fast Swing%' }, { key: 'Swords', label: 'Swords' },
+  ]},
+  { group: 'Bat Tracking (Against)', stats: [
+    { key: 'BatSpeed', label: 'Bat Speed' }, { key: 'FastSwing%', label: 'Fast Swing%' },
+    { key: 'Blasts/C', label: 'Blasts/C' }, { key: 'Blasts/Sw', label: 'Blasts/Sw' },
+    { key: 'SqUp/C', label: 'Sq-Up/C' }, { key: 'SqUp/Sw', label: 'Sq-Up/Sw' },
+    { key: 'SwingLen', label: 'Swing Len' }, { key: 'Swords', label: 'Swords' },
   ]},
   { group: 'Win Probability', stats: [
     { key: 'WPA', label: 'WPA' }, { key: '-WPA', label: '-WPA' }, { key: '+WPA', label: '+WPA' },
@@ -477,7 +488,7 @@ const PCT_KEYS = new Set([
   'CStr%','C+SwStr%','IFH%','BUH%','TTO%',
   'pfxFA%','pfxFC%','pfxFS%','pfxFO%','pfxSI%','pfxSL%','pfxCU%','pfxKC%','pfxEP%','pfxCH%','pfxKN%','pfxUN%',
   'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%',
-  'Barrel%','HardHit%','FastSwing%',
+  'Barrel%','HardHit%','FastSwing%','Blasts/C','Blasts/Sw','SqUp/C','SqUp/Sw',
 ]);
 const SLASH_KEYS = new Set(['AVG','OBP','SLG','OPS','ISO','wOBA','xwOBA','xSLG','BABIP']);
 const COUNTING_KEYS = new Set([
@@ -511,7 +522,7 @@ function formatStat(v, key) {
   if (PCT_KEYS.has(key)) return (v * 100).toFixed(1) + '%';
   if (['ERA','FIP','xFIP','SIERA','xERA','WHIP','HR/9','BB/9','K/9','H/9','K/BB','GB/FB','Spd','BB/K'].includes(key)) return v.toFixed(2);
   if (['WAR','IP','Start-IP','Relief-IP','WPA','-WPA','+WPA','Starting','Relieving','RAR','Batting','Offense',
-       'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle'].includes(key)) return v.toFixed(1);
+       'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle','BatSpeed','SwingLen'].includes(key)) return v.toFixed(1);
   if (['ERA-','FIP-','xFIP-','sp_stuff','sp_location','sp_pitching','wRC+','AVG+','BB%+','K%+','OBP+','SLG+','ISO+','BABIP+'].includes(key)) return String(Math.round(v));
   if (key.startsWith('pfxv')) return v.toFixed(1);
   if (key === 'Age') return String(Math.round(v));
@@ -554,6 +565,71 @@ function percentileColor(pct) {
   return `rgb(${rgb.join(',')})`;
 }
 
+// ─── CSV parsing (handles quoted fields with embedded commas) ──────────────────
+function parseCSV(text) {
+  text = text.replace(/^﻿/, '');
+  const rows = [];
+  let row = [], field = '', inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; }
+        else inQuotes = false;
+      } else field += c;
+    } else if (c === '"') inQuotes = true;
+    else if (c === ',') { row.push(field); field = ''; }
+    else if (c === '\n' || c === '\r') {
+      if (c === '\r' && text[i + 1] === '\n') i++;
+      row.push(field); field = '';
+      if (row.length > 1 || row[0] !== '') rows.push(row);
+      row = [];
+    } else field += c;
+  }
+  if (field !== '' || row.length) { row.push(field); rows.push(row); }
+  if (!rows.length) return [];
+  const header = rows[0];
+  return rows.slice(1).map(r => {
+    const obj = {};
+    header.forEach((h, i) => { obj[h] = r[i]; });
+    return obj;
+  });
+}
+function csvNum(v) {
+  if (v == null || v === '' || v === 'NaN') return null;
+  const n = parseFloat(v);
+  return isNaN(n) ? null : n;
+}
+
+// Baseball Savant's bat-tracking leaderboard — supplemental to FanGraphs, keyed by MLBAM id.
+async function loadBatTracking(year, savantType) {
+  const params = new URLSearchParams({
+    path: '/leaderboard/bat-tracking', gameType: 'Regular', minSwings: 'q', minGroupSwings: '1',
+    seasonStart: String(year), seasonEnd: String(year), type: savantType, team: '', csv: 'true',
+  });
+  const resp = await fetch(`${SAVANT_PROXY}?${params}`);
+  if (!resp.ok) return new Map();
+  const text = await resp.text();
+  if (text.trim().startsWith('<')) return new Map();
+  const rows = parseCSV(text);
+  const map = new Map();
+  for (const row of rows) {
+    const id = parseInt(row.id, 10);
+    if (!id) continue;
+    map.set(id, {
+      BatSpeed: csvNum(row.avg_bat_speed),
+      'FastSwing%': csvNum(row.hard_swing_rate),
+      'Blasts/C': csvNum(row.blast_per_bat_contact),
+      'Blasts/Sw': csvNum(row.blast_per_swing),
+      'SqUp/C': csvNum(row.squared_up_per_bat_contact),
+      'SqUp/Sw': csvNum(row.squared_up_per_swing),
+      SwingLen: csvNum(row.swing_length),
+      Swords: csvNum(row.swords),
+    });
+  }
+  return map;
+}
+
 // ─── Data loading ────────────────────────────────────────────────────────────
 const leaderboardCache = new Map(); // `${year}:${statType}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
 
@@ -566,7 +642,11 @@ async function loadLeaderboard(year, statType, statGroups) {
     season: String(year), season1: String(year), month: '0', ind: '0', hand: '', team: '0',
     pageitems: '10000', pagenum: '1', sortstat: 'WAR', sortdir: 'default',
   });
-  const resp = await fetch(`${FG_PROXY}?${params}`);
+  const savantType = statType === 'bat' ? 'batter' : 'pitcher';
+  const [resp, batTracking] = await Promise.all([
+    fetch(`${FG_PROXY}?${params}`),
+    loadBatTracking(year, savantType).catch(() => new Map()),
+  ]);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
   if (json.error) throw new Error(json.error);
@@ -575,9 +655,12 @@ async function loadLeaderboard(year, statType, statGroups) {
   const players = new Map();
   for (const row of rows) {
     if (row.playerid == null) continue;
+    const mlbId = row.xMLBAMID || null;
+    const bt = mlbId ? batTracking.get(mlbId) : null;
+    if (bt) Object.assign(row, bt);
     players.set(row.playerid, {
       id: row.playerid,
-      mlbId: row.xMLBAMID || null,
+      mlbId,
       name: row.PlayerName,
       teamAbb: row.TeamNameAbb,
       teamId: MLB_TEAM_IDS[row.TeamNameAbb] || null,
