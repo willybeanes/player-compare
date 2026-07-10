@@ -434,7 +434,7 @@ function getSplitOptions(year) {
 // FanGraphs — Savant's leaderboards don't support date-range filtering, so
 // these always reflect the full season regardless of the selected split.
 const SAVANT_SUPPLEMENTAL_KEYS = new Set([
-  'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed',
+  'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed', 'xwOBACON',
 ]);
 
 // Rebuilds the URL query string from the *active* tab's player/season selections
@@ -472,13 +472,14 @@ const STAT_GROUPS_HITTING = [
     { key: 'Age', label: 'Age' }, { key: 'AVG', label: 'AVG' }, { key: 'OBP', label: 'OBP' },
     { key: 'SLG', label: 'SLG' }, { key: 'OPS', label: 'OPS' }, { key: 'ISO', label: 'ISO' },
     { key: 'wOBA', label: 'wOBA' }, { key: 'xwOBA', label: 'xwOBA' }, { key: 'xSLG', label: 'xSLG' },
+    { key: 'xwOBACON', label: 'xwOBACON' },
     { key: 'wRC+', label: 'wRC+' }, { key: 'WAR', label: 'WAR' }, { key: 'RAR', label: 'RAR' },
     { key: 'Batting', label: 'Batting' }, { key: 'Offense', label: 'Offense' },
   ]},
   { group: 'Counting', stats: [
     { key: 'G', label: 'G' }, { key: 'AB', label: 'AB' }, { key: 'PA', label: 'PA' },
     { key: 'H', label: 'H' }, { key: '1B', label: '1B' }, { key: '2B', label: '2B' },
-    { key: '3B', label: '3B' }, { key: 'HR', label: 'HR' }, { key: 'R', label: 'R' },
+    { key: '3B', label: '3B' }, { key: 'HR', label: 'HR' }, { key: 'XBH', label: 'XBH' }, { key: 'R', label: 'R' },
     { key: 'RBI', label: 'RBI' }, { key: 'BB', label: 'BB' }, { key: 'IBB', label: 'IBB' },
     { key: 'SO', label: 'SO' }, { key: 'HBP', label: 'HBP' },
     { key: 'SF', label: 'SF' }, { key: 'SH', label: 'SH' }, { key: 'GDP', label: 'GDP' },
@@ -507,7 +508,7 @@ const STAT_GROUPS_HITTING = [
     { key: 'SwStr%', label: 'SwStr%' }, { key: 'CStr%', label: 'CStr%' },
   ]},
   { group: 'Baserunning', stats: [
-    { key: 'SB', label: 'SB' }, { key: 'CS', label: 'CS' },
+    { key: 'SB', label: 'SB' }, { key: 'CS', label: 'CS' }, { key: 'SB+CS', label: 'SB+CS' },
     { key: 'BaseRunning', label: 'BsR' }, { key: 'Spd', label: 'Spd' },
     { key: 'SprintSpeed', label: 'Sprint Speed' },
   ]},
@@ -618,11 +619,11 @@ const PCT_KEYS = new Set([
   'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%',
   'Barrel%','HardHit%','FastSwing%','Blasts/C','Blasts/Sw','SqUp/C','SqUp/Sw',
 ]);
-const SLASH_KEYS = new Set(['AVG','OBP','SLG','OPS','ISO','wOBA','xwOBA','xSLG','BABIP']);
+const SLASH_KEYS = new Set(['AVG','OBP','SLG','OPS','ISO','wOBA','xwOBA','xSLG','xwOBACON','BABIP']);
 const COUNTING_KEYS = new Set([
   'W','L','G','GS','CG','ShO','SV','HLD','BS','TBF','H','R','ER','HR','BB','IBB','HBP','WP','BK','SO',
   'GB','FB','LD','IFFB','Pitches','Balls','Strikes','RS','IFH','BU','BUH','SD','MD',
-  'AB','PA','1B','2B','3B','RBI','SF','SH','GDP','SB','CS','Swords','Barrels',
+  'AB','PA','1B','2B','3B','RBI','SF','SH','GDP','SB','CS','Swords','Barrels','XBH','SB+CS',
 ]);
 const LOWER_IS_BETTER_ALWAYS = new Set(['ERA','FIP','xFIP','SIERA','xERA','WHIP','H/9','BB/9','HR/9','ERA-','FIP-','xFIP-','L','BS','-WPA']);
 const LOWER_IS_BETTER_PITCHING = new Set(['BB%','BABIP','HBP','HR/FB','wOBA','SLG','xwOBA','xSLG','Barrel%','Barrels','HardHit%','EV','maxEV']);
@@ -801,7 +802,8 @@ async function loadBatTrackingUncached(year, savantType) {
   return map;
 }
 
-// Baseball Savant's Sprint Speed (Statcast-measured ft/sec) — supplemental to
+// Baseball Savant's custom leaderboard — Sprint Speed (Statcast-measured
+// ft/sec) and xwOBACON, neither of which FanGraphs exposes. Supplemental to
 // FanGraphs, keyed by MLBAM id. Hitters only. Always full-season; cached by
 // year alone and reused across every split.
 const sprintSpeedCache = new Map(); // year -> Map<mlbId, fields>
@@ -814,7 +816,7 @@ async function loadSprintSpeed(year) {
 async function loadSprintSpeedUncached(year) {
   const params = new URLSearchParams({
     path: '/leaderboard/custom', type: 'batter', year: String(year), filter: '', min: '1',
-    selections: 'pa,sprint_speed', chart: 'false', x: 'pa', y: 'pa', r: 'no', chartType: 'beeswarm', csv: 'true',
+    selections: 'pa,sprint_speed,xwobacon', chart: 'false', x: 'pa', y: 'pa', r: 'no', chartType: 'beeswarm', csv: 'true',
   });
   const resp = await fetch(`${SAVANT_PROXY}?${params}`);
   if (!resp.ok) return new Map();
@@ -825,7 +827,7 @@ async function loadSprintSpeedUncached(year) {
   for (const row of rows) {
     const id = parseInt(row.player_id, 10);
     if (!id) continue;
-    map.set(id, { SprintSpeed: csvNum(row.sprint_speed) });
+    map.set(id, { SprintSpeed: csvNum(row.sprint_speed), xwOBACON: csvNum(row.xwobacon) });
   }
   return map;
 }
@@ -871,6 +873,11 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     if (bt) Object.assign(row, bt);
     const ss = mlbId ? sprintSpeed.get(mlbId) : null;
     if (ss) Object.assign(row, ss);
+    if (statType === 'bat') {
+      // Not in FanGraphs' payload — trivially derived from fields that are.
+      row.XBH = (rawValue(row['2B'], '2B') ?? 0) + (rawValue(row['3B'], '3B') ?? 0) + (rawValue(row.HR, 'HR') ?? 0);
+      row['SB+CS'] = (rawValue(row.SB, 'SB') ?? 0) + (rawValue(row.CS, 'CS') ?? 0);
+    }
     players.set(row.playerid, {
       id: row.playerid,
       mlbId,
