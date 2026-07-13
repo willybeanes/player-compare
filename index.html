@@ -124,6 +124,25 @@
     }
     .split-badge.visible { display: inline-block; }
 
+    /* 3-way player heads (no natural bidirectional "vs" — bars grow uniformly instead) */
+    .player-heads-3 {
+      display: grid; grid-template-columns: repeat(3, 1fr); align-items: start; gap: 12px;
+      padding-bottom: 14px; border-bottom: 1px solid #ede9e4;
+    }
+    .split-badge-wrap { display: flex; justify-content: center; margin: 10px 0; }
+
+    /* 3-way stat rows: label column + one bar/value column per player */
+    .stat-row-3 {
+      display: grid; grid-template-columns: 96px repeat(3, 1fr);
+      align-items: center; gap: 10px; padding: 6px 0;
+    }
+    .stat-label-wrap-3 { display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
+    .stat-label-wrap-3 .stat-label { text-align: left; }
+    .tri-col { display: flex; align-items: center; gap: 8px; }
+    .tri-col .bar-track { flex: 1; }
+    .tri-col .stat-value { flex-shrink: 0; min-width: 42px; text-align: right; font-size: 0.78rem; }
+    .bar-track.uni { justify-content: flex-start; }
+
     /* Stat rows */
     .stat-row {
       display: grid; grid-template-columns: 56px 1fr 132px 1fr 56px;
@@ -246,6 +265,10 @@
       .stat-value { font-size: 0.7rem; }
       .stat-label { font-size: 0.58rem; }
       .bar-value-label { font-size: 0.54rem; }
+      .player-heads-3 { gap: 6px; }
+      .stat-row-3 { grid-template-columns: 56px repeat(3, 1fr); gap: 4px; }
+      .tri-col { gap: 3px; }
+      .tri-col .stat-value { min-width: 30px; font-size: 0.62rem; }
     }
   </style>
 </head>
@@ -257,6 +280,7 @@
   <nav class="tab-bar">
     <button class="tab-btn active" data-tab="hitter">Hitter Compare</button>
     <button class="tab-btn" data-tab="pitcher">Pitcher Compare</button>
+    <button class="tab-btn" data-tab="3hitter">3 Hitter Compare</button>
   </nav>
 </header>
 
@@ -370,6 +394,67 @@
     </div>
   </div>
 
+  <!-- 3-HITTER TAB -->
+  <div id="tab-3hitter" class="tab-panel">
+    <div class="card">
+      <div class="toolbar">
+        <div>
+          <div class="field-label">Player A</div>
+          <div class="select-wrap" id="tri-a-select-wrap">
+            <input type="text" id="tri-a-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="tri-a-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Player B</div>
+          <div class="select-wrap" id="tri-b-select-wrap">
+            <input type="text" id="tri-b-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="tri-b-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Player C</div>
+          <div class="select-wrap" id="tri-c-select-wrap">
+            <input type="text" id="tri-c-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="tri-c-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Season</div>
+          <select id="tri-year-select" class="year-select"></select>
+        </div>
+        <div>
+          <div class="field-label">Split</div>
+          <select id="tri-split-select" class="year-select"></select>
+        </div>
+      </div>
+    </div>
+
+    <div id="tri-loading" class="state-overlay">
+      <div class="spinner"></div>
+      <span>Loading data…</span>
+    </div>
+    <div id="tri-error" class="state-overlay" style="display:none">
+      <div class="error-box"><strong>Couldn't load data.</strong><br>The FanGraphs proxy may be temporarily unavailable — try again in a moment.</div>
+    </div>
+
+    <div id="tri-content" style="display:none">
+      <div class="card">
+        <div class="player-heads-3">
+          <div class="player-head" id="tri-head-a"></div>
+          <div class="player-head" id="tri-head-b"></div>
+          <div class="player-head" id="tri-head-c"></div>
+        </div>
+        <div class="split-badge-wrap"><div class="split-badge"></div></div>
+        <div id="tri-stats-card"></div>
+      </div>
+      <div class="customize-footer">
+        <button class="btn" id="tri-customize-btn">Customize</button>
+        <button class="reset-link" id="tri-reset-btn">Reset to default</button>
+      </div>
+    </div>
+  </div>
+
 </div>
 
 <footer>
@@ -450,8 +535,9 @@ function updateURL() {
     const s = ctrl.getShareState();
     if (s.year) params.set('year', String(s.year));
     if (s.split && s.split !== 'season') params.set('split', s.split);
-    if (s.a) params.set('a', s.a);
-    if (s.b) params.set('b', s.b);
+    (s.players || []).forEach((name, i) => {
+      if (name) params.set(String.fromCharCode(97 + i), name); // a, b, c, ...
+    });
   }
   const qs = params.toString();
   history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
@@ -1109,7 +1195,7 @@ function createCompareTab(cfg) {
 
   function syncURL() { updateURL(); }
   tabControllers[cfg.tabName] = {
-    getShareState: () => ({ year: state.year, split: state.splitKey, a: state.playerAName, b: state.playerBName }),
+    getShareState: () => ({ year: state.year, split: state.splitKey, players: [state.playerAName, state.playerBName] }),
   };
 
   // Pointer-events based drag reordering (works for mouse, touch, and pen —
@@ -1361,6 +1447,307 @@ function createCompareTab(cfg) {
   render();
 }
 
+// ─── 3-player tab controller factory ────────────────────────────────────────
+// Same data layer, formatting, drag-reorder, and customize picker as the 2-way
+// tabs, but with N players in an array instead of separate A/B fields — the
+// bidirectional "grow toward center" bar doesn't generalize past 2, so each
+// player gets its own unidirectional bar (grows left-to-right from 0) instead.
+function createTripleCompareTab(cfg) {
+  const el = id => document.getElementById(id);
+  const n = cfg.ids.inputs.length;
+  const inputs = cfg.ids.inputs.map(el);
+  const dropdownEls = cfg.ids.dropdowns.map(el);
+  const headEls = cfg.ids.heads.map(el);
+  const yearSelect = el(cfg.ids.yearSelect);
+  const customizeBtn = el(cfg.ids.customizeBtn);
+  const resetBtn = el(cfg.ids.resetBtn);
+  const splitBadge = headEls[0].closest('.card').querySelector('.split-badge');
+  const statsCard = el(cfg.ids.statsCard);
+  const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
+
+  function loadPersisted() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(cfg.storageKey));
+      if (saved && typeof saved === 'object') return saved;
+    } catch {}
+    return {};
+  }
+  const persisted = loadPersisted();
+  function savePersisted() {
+    localStorage.setItem(cfg.storageKey, JSON.stringify({
+      year: state.year,
+      splitKey: state.splitKey,
+      playerNames: state.players.map(p => p.name),
+      statKeys: state.statKeys,
+    }));
+  }
+
+  const urlAppliesHere = URL_PARAMS.get('tab') === cfg.tabName;
+  const urlYear = urlAppliesHere ? parseInt(URL_PARAMS.get('year'), 10) : NaN;
+  const urlSplit = urlAppliesHere ? URL_PARAMS.get('split') : null;
+  const urlNames = urlAppliesHere ? cfg.playerLetters.map(l => URL_PARAMS.get(l)) : [];
+
+  const state = {
+    year: (!isNaN(urlYear) && YEARS.includes(urlYear)) ? urlYear
+        : (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
+    splitKey: urlSplit || persisted.splitKey || 'season',
+    players: Array.from({ length: n }, (_, i) => ({
+      id: null,
+      name: urlNames[i] || (persisted.playerNames && persisted.playerNames[i]) || null,
+    })),
+    statKeys: (Array.isArray(persisted.statKeys) && persisted.statKeys.length) ? persisted.statKeys : [...cfg.defaultKeys],
+    customizing: false,
+  };
+  if (!getSplitOptions(state.year).some(o => o.key === state.splitKey)) state.splitKey = 'season';
+
+  let current = null; // { lb, players: [player, ...] }
+  let draggedKey = null;
+  let dragPointerId = null;
+  let dragTarget = null;
+
+  function getCurrentSplit() {
+    return getSplitOptions(state.year).find(o => o.key === state.splitKey) || getSplitOptions(state.year)[0];
+  }
+
+  function syncURL() { updateURL(); }
+  tabControllers[cfg.tabName] = {
+    getShareState: () => ({ year: state.year, split: state.splitKey, players: state.players.map(p => p.name) }),
+  };
+
+  document.addEventListener('pointermove', (e) => {
+    if (draggedKey == null || e.pointerId !== dragPointerId) return;
+    const rows = [...statsCard.querySelectorAll('.stat-row-3')];
+    rows.forEach(r => r.classList.remove('drag-over-top', 'drag-over-bottom'));
+    const overRow = rows.find(r => {
+      const rect = r.getBoundingClientRect();
+      return e.clientY >= rect.top && e.clientY <= rect.bottom;
+    });
+    if (overRow && overRow.dataset.key !== draggedKey) {
+      const rect = overRow.getBoundingClientRect();
+      const isAfter = (e.clientY - rect.top) > rect.height / 2;
+      overRow.classList.toggle('drag-over-top', !isAfter);
+      overRow.classList.toggle('drag-over-bottom', isAfter);
+      dragTarget = { key: overRow.dataset.key, isAfter };
+    } else {
+      dragTarget = null;
+    }
+  });
+  function endDrag(e) {
+    if (draggedKey == null || (e && e.pointerId !== dragPointerId)) return;
+    const key = draggedKey, target = dragTarget;
+    statsCard.querySelectorAll('.stat-row-3').forEach(r =>
+      r.classList.remove('dragging', 'drag-over-top', 'drag-over-bottom'));
+    document.body.style.userSelect = '';
+    draggedKey = null;
+    dragPointerId = null;
+    dragTarget = null;
+    if (target && target.key !== key) {
+      const keys = state.statKeys;
+      const fromIdx = keys.indexOf(key);
+      if (fromIdx === -1) return;
+      keys.splice(fromIdx, 1);
+      let toIdx = keys.indexOf(target.key);
+      if (target.isAfter) toIdx += 1;
+      keys.splice(toIdx, 0, key);
+      savePersisted();
+      renderStatsOnly();
+    }
+  }
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+
+  function statMeta(key) {
+    for (const g of cfg.statGroups) {
+      const s = g.stats.find(s => s.key === key);
+      if (s) return s;
+    }
+    return { key, label: key };
+  }
+
+  function setLoading(isLoading, isError) {
+    loadingEl.style.display = isLoading ? 'flex' : 'none';
+    errorEl.style.display = isError ? 'flex' : 'none';
+    contentEl.style.display = (!isLoading && !isError) ? 'block' : 'none';
+  }
+
+  function getPlayersForYear() {
+    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}:${state.splitKey}`);
+    return lb ? [...lb.players.values()] : [];
+  }
+
+  async function render() {
+    setLoading(true, false);
+    try {
+      const lb = await loadLeaderboard(state.year, cfg.statType, cfg.statGroups, getCurrentSplit());
+      const list = [...lb.players.values()];
+      const findByName = (name) => name ? list.find(p => p.name === name) : null;
+      let changed = false;
+      const resolved = state.players.map((slot, i) => {
+        let p = slot.id ? lb.players.get(slot.id) : null;
+        if (!p) {
+          p = findByName(slot.name) || findByName(cfg.defaultNames[i]) || list[i] || list[0];
+          slot.id = p.id;
+          slot.name = p.name;
+          changed = true;
+        }
+        return p;
+      });
+      if (changed) {
+        savePersisted();
+        syncURL();
+        resolved.forEach((p, i) => dropdowns[i].setValueSilently(p));
+      }
+      current = { lb, players: resolved };
+      resolved.forEach((p, i) => renderPlayerHead(headEls[i], p, cfg.statType));
+      const split = getCurrentSplit();
+      splitBadge.textContent = split.label;
+      splitBadge.classList.toggle('visible', split.key !== 'season');
+      renderStatsOnly();
+      setLoading(false, false);
+    } catch (err) {
+      console.error(err);
+      setLoading(false, true);
+    }
+  }
+
+  function renderStatsOnly() {
+    if (!current) return;
+    const { lb, players } = current;
+    const splitDays = getCurrentSplit().days;
+    let html = '';
+    for (const key of state.statKeys) {
+      const meta = statMeta(key);
+      const ranker = lb.percentiles.get(meta.key);
+      const lower = lowerIsBetter(meta.key, cfg.statType);
+      const exempt = ALWAYS_QUALIFIED_KEYS.has(meta.key);
+      const splitNote = (state.splitKey !== 'season' && SAVANT_SUPPLEMENTAL_KEYS.has(meta.key))
+        ? ` <span class="stat-label-note" title="Full season — Baseball Savant does not support date-range filtering">•</span>` : '';
+
+      const cols = players.map(p => {
+        const v = rawValue(p.raw[meta.key], meta.key);
+        let pct = ranker ? ranker(v) : null;
+        if (lower && pct != null) pct = 100 - pct;
+        const f = formatStat(v, meta.key);
+        const color = pct != null ? percentileColor(pct) : '#e8e4de';
+        const width = pct != null ? Math.max(pct, 4) : 0;
+        const barLabel = pct == null ? '' : String(Math.round(pct));
+        const unqual = pct != null && !p.qualified && !exempt;
+        return `
+          <div class="tri-col">
+            <div class="bar-track uni"><div class="bar-fill${unqual ? ' unqualified' : ''}" style="width:${width}%;background-color:${color}" title="${unqual ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${barLabel ? `<span class="bar-value-label" style="left:${width / 2}%">${barLabel}</span>` : ''}</div>
+            <div class="stat-value ${f == null ? 'dim' : ''}">${f ?? '—'}</div>
+          </div>`;
+      }).join('');
+
+      html += `
+        <div class="stat-row-3${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
+          <div class="stat-label-wrap-3">
+            ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
+            <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
+            ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
+          </div>
+          ${cols}
+        </div>`;
+    }
+    if (state.customizing) {
+      html += `<button class="add-stat-btn" id="${cfg.ids.addBtn}">+ Add metric</button>`;
+    }
+    statsCard.innerHTML = html;
+    if (state.customizing) wireEditableRows();
+  }
+
+  function wireEditableRows() {
+    statsCard.querySelectorAll('.stat-row-3').forEach(row => {
+      const key = row.dataset.key;
+      row.querySelector('[data-action="remove"]')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (state.statKeys.length <= 1) return;
+        state.statKeys = state.statKeys.filter(k => k !== key);
+        savePersisted();
+        renderStatsOnly();
+      });
+      row.querySelector('[data-action="pick"]')?.addEventListener('click', (e) => {
+        openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
+          const idx = state.statKeys.indexOf(key);
+          if (idx >= 0) state.statKeys[idx] = newKey;
+          savePersisted();
+          renderStatsOnly();
+        });
+      });
+
+      const handle = row.querySelector('.stat-drag-handle');
+      handle?.addEventListener('pointerdown', (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        e.preventDefault();
+        try { handle.setPointerCapture(e.pointerId); } catch {}
+        draggedKey = key;
+        dragPointerId = e.pointerId;
+        dragTarget = null;
+        row.classList.add('dragging');
+        document.body.style.userSelect = 'none';
+      });
+    });
+    const addBtn = document.getElementById(cfg.ids.addBtn);
+    addBtn?.addEventListener('click', (e) => {
+      openMetricPicker(e.currentTarget, cfg.statGroups, state.statKeys, (newKey) => {
+        state.statKeys.push(newKey);
+        savePersisted();
+        renderStatsOnly();
+      });
+    });
+  }
+
+  customizeBtn.addEventListener('click', () => {
+    state.customizing = !state.customizing;
+    customizeBtn.textContent = state.customizing ? 'Done' : 'Customize';
+    customizeBtn.classList.toggle('active', state.customizing);
+    resetBtn.classList.toggle('visible', state.customizing);
+    renderStatsOnly();
+  });
+  resetBtn.addEventListener('click', () => {
+    state.statKeys = [...cfg.defaultKeys];
+    savePersisted();
+    renderStatsOnly();
+  });
+
+  const dropdowns = inputs.map((inputEl, i) =>
+    buildDropdown(inputEl, dropdownEls[i], (p) => {
+      state.players[i] = { id: p.id, name: p.name };
+      savePersisted();
+      syncURL();
+      render();
+    }, getPlayersForYear)
+  );
+
+  const splitSelect = el(cfg.ids.splitSelect);
+  function populateSplitSelect() {
+    const opts = getSplitOptions(state.year);
+    if (!opts.some(o => o.key === state.splitKey)) state.splitKey = 'season';
+    splitSelect.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
+    splitSelect.value = state.splitKey;
+  }
+  populateSplitSelect();
+  splitSelect.addEventListener('change', () => {
+    state.splitKey = splitSelect.value;
+    savePersisted();
+    syncURL();
+    render();
+  });
+
+  yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
+  yearSelect.value = String(state.year);
+  yearSelect.addEventListener('change', () => {
+    state.year = parseInt(yearSelect.value, 10);
+    state.players.forEach(p => { p.id = null; });
+    populateSplitSelect();
+    savePersisted();
+    syncURL();
+    render();
+  });
+
+  render();
+}
+
 createCompareTab({
   statType: 'bat',
   tabName: 'hitter',
@@ -1397,13 +1784,31 @@ createCompareTab({
   },
 });
 
+createTripleCompareTab({
+  statType: 'bat',
+  tabName: '3hitter',
+  statGroups: STAT_GROUPS_HITTING,
+  defaultKeys: DEFAULT_HITTER_KEYS,
+  storageKey: 'player-compare:tripleHitterStats',
+  defaultNames: ['Aaron Judge', 'Shohei Ohtani', 'Bobby Witt Jr.'],
+  playerLetters: ['a', 'b', 'c'],
+  ids: {
+    inputs: ['tri-a-search', 'tri-b-search', 'tri-c-search'],
+    dropdowns: ['tri-a-dropdown', 'tri-b-dropdown', 'tri-c-dropdown'],
+    heads: ['tri-head-a', 'tri-head-b', 'tri-head-c'],
+    yearSelect: 'tri-year-select', splitSelect: 'tri-split-select',
+    customizeBtn: 'tri-customize-btn', resetBtn: 'tri-reset-btn', addBtn: 'tri-add-stat-btn',
+    statsCard: 'tri-stats-card', loading: 'tri-loading', error: 'tri-error', content: 'tri-content',
+  },
+});
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 const ACTIVE_TAB_KEY = 'player-compare:activeTab';
 
+const VALID_TABS = ['hitter', 'pitcher', '3hitter'];
 function activateTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
-  document.getElementById('tab-hitter').classList.toggle('active', tab === 'hitter');
-  document.getElementById('tab-pitcher').classList.toggle('active', tab === 'pitcher');
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
   localStorage.setItem(ACTIVE_TAB_KEY, tab);
 }
 
@@ -1412,11 +1817,11 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 });
 
 const urlTab = URL_PARAMS.get('tab');
-if (urlTab === 'hitter' || urlTab === 'pitcher') {
+if (VALID_TABS.includes(urlTab)) {
   activateTab(urlTab);
 } else {
   const savedTab = localStorage.getItem(ACTIVE_TAB_KEY);
-  if (savedTab === 'hitter' || savedTab === 'pitcher') activateTab(savedTab);
+  if (VALID_TABS.includes(savedTab)) activateTab(savedTab);
 }
 </script>
 </body>
