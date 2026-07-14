@@ -467,7 +467,7 @@
 
 <footer>
   Data: <a href="https://www.fangraphs.com" target="_blank" rel="noopener">FanGraphs</a>. Percentiles computed against hitters with 100+ PA / pitchers with 20+ IP in the selected window.
-  Bat Speed, Sprint Speed, and other Baseball Savant metrics (marked with •) always reflect the full season regardless of split.
+  Bat Speed, Sprint Speed, DRS, OAA, and other metrics (marked with •) not available on FanGraphs' main leaderboard always reflect the full season regardless of split.
 </footer>
 
 <script>
@@ -534,11 +534,13 @@ function getSplitOptionsIntersect(yearA, yearB) {
   return optsA.filter(o => keysB.has(o.key));
 }
 
-// Stats sourced from Baseball Savant (bat-tracking, sprint speed) rather than
-// FanGraphs — Savant's leaderboards don't support date-range filtering, so
-// these always reflect the full season regardless of the selected split.
-const SAVANT_SUPPLEMENTAL_KEYS = new Set([
+// Stats sourced from supplemental leaderboards (Baseball Savant bat-tracking
+// / sprint speed, and FanGraphs' separate fielding leaderboard) rather than
+// the main FanGraphs leaderboard — none of these support date-range
+// filtering, so they always reflect the full season regardless of split.
+const FULL_SEASON_ONLY_KEYS = new Set([
   'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed', 'xwOBACON',
+  'DRS', 'OAA',
 ]);
 
 // Rebuilds the URL query string from the *active* tab's player/season selections
@@ -619,6 +621,9 @@ const STAT_GROUPS_HITTING = [
     { key: 'SB', label: 'SB' }, { key: 'CS', label: 'CS' }, { key: 'SB+CS', label: 'SB+CS' },
     { key: 'BaseRunning', label: 'BsR' }, { key: 'Spd', label: 'Spd' },
     { key: 'SprintSpeed', label: 'Sprint Speed' },
+  ]},
+  { group: 'Fielding', stats: [
+    { key: 'DRS', label: 'DRS' }, { key: 'OAA', label: 'OAA' },
   ]},
   { group: 'Batted Ball Quality', stats: [
     { key: 'EV', label: 'EV' }, { key: 'EV90', label: 'EV90' }, { key: 'LA', label: 'LA' },
@@ -733,6 +738,7 @@ const COUNTING_KEYS = new Set([
   'W','L','G','GS','CG','ShO','SV','HLD','BS','TBF','H','R','ER','HR','BB','IBB','HBP','WP','BK','SO',
   'GB','FB','LD','IFFB','Pitches','Balls','Strikes','RS','IFH','BU','BUH','SD','MD',
   'AB','PA','1B','2B','3B','RBI','SF','SH','GDP','SB','CS','Swords','Barrels','XBH','SB+CS',
+  'DRS','OAA',
 ]);
 const LOWER_IS_BETTER_ALWAYS = new Set(['ERA','FIP','xFIP','SIERA','xERA','WHIP','H/9','BB/9','HR/9','ERA-','FIP-','xFIP-','L','BS','-WPA']);
 const LOWER_IS_BETTER_PITCHING = new Set(['BB%','BABIP','HBP','HR/FB','wOBA','SLG','xwOBA','xSLG','Barrel%','Barrels','HardHit%','EV','maxEV']);
@@ -941,6 +947,40 @@ async function loadSprintSpeedUncached(year) {
   return map;
 }
 
+// FanGraphs' fielding leaderboard (DRS, OAA) — a separate leaderboard from the
+// main batting one we fetch, keyed by FanGraphs playerid (not MLBAM id, since
+// it's FanGraphs data). It returns one row PER POSITION a player played, so a
+// multi-position player needs those rows summed into a single season total.
+// Doesn't support date-range filtering, so it's always full-season; cached by
+// year alone and reused across every split.
+const fieldingCache = new Map(); // year -> Map<playerid, { DRS, OAA }>
+async function loadFielding(year) {
+  if (fieldingCache.has(year)) return fieldingCache.get(year);
+  const result = await loadFieldingUncached(year);
+  fieldingCache.set(year, result);
+  return result;
+}
+async function loadFieldingUncached(year) {
+  const params = new URLSearchParams({
+    pos: 'all', stats: 'fld', lg: 'all', qual: '0', type: '1',
+    season: String(year), season1: String(year), ind: '0', hand: '', team: '0',
+    pageitems: '10000', pagenum: '1', sortstat: 'Inn', sortdir: 'default', month: '0',
+  });
+  const resp = await fetch(`${FG_PROXY}?${params}`);
+  if (!resp.ok) return new Map();
+  const json = await resp.json();
+  const rows = json.data || [];
+  const map = new Map();
+  for (const row of rows) {
+    if (row.playerid == null) continue;
+    const acc = map.get(row.playerid) || { DRS: 0, OAA: 0 };
+    if (row.DRS != null) acc.DRS += row.DRS;
+    if (row.OAA != null) acc.OAA += row.OAA;
+    map.set(row.playerid, acc);
+  }
+  return map;
+}
+
 // ─── Data loading ────────────────────────────────────────────────────────────
 const leaderboardCache = new Map(); // `${year}:${statType}:${splitKey}` -> { players: Map<id, player>, percentiles: Map<key, Map<id, pct>> }
 
@@ -955,10 +995,11 @@ async function loadLeaderboard(year, statType, statGroups, split) {
   });
   for (const [k, v] of Object.entries(split.params)) params.set(k, v);
   const savantType = statType === 'bat' ? 'batter' : 'pitcher';
-  const [resp, batTracking, sprintSpeed] = await Promise.all([
+  const [resp, batTracking, sprintSpeed, fielding] = await Promise.all([
     fetch(`${FG_PROXY}?${params}`),
     loadBatTracking(year, savantType).catch(() => new Map()),
     statType === 'bat' ? loadSprintSpeed(year).catch(() => new Map()) : Promise.resolve(new Map()),
+    statType === 'bat' ? loadFielding(year).catch(() => new Map()) : Promise.resolve(new Map()),
   ]);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
@@ -982,6 +1023,8 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     if (bt) Object.assign(row, bt);
     const ss = mlbId ? sprintSpeed.get(mlbId) : null;
     if (ss) Object.assign(row, ss);
+    const fd = fielding.get(row.playerid);
+    if (fd) Object.assign(row, fd);
     // Not in FanGraphs' payload — trivially derived from fields that are.
     const oSwing = rawValue(row['O-Swing%'], 'O-Swing%');
     const zSwing = rawValue(row['Z-Swing%'], 'Z-Swing%');
@@ -1371,8 +1414,8 @@ function createCompareTab(cfg) {
       const labelB = pctB == null ? '' : String(Math.round(pctB));
       const centerA = 100 - widthA / 2;
       const centerB = widthB / 2;
-      const splitNote = (state.splitKey !== 'season' && SAVANT_SUPPLEMENTAL_KEYS.has(meta.key))
-        ? ` <span class="stat-label-note" title="Full season — Baseball Savant does not support date-range filtering">•</span>` : '';
+      const splitNote = (state.splitKey !== 'season' && FULL_SEASON_ONLY_KEYS.has(meta.key))
+        ? ` <span class="stat-label-note" title="Full season — this metric's source leaderboard doesn't support date-range filtering">•</span>` : '';
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
@@ -1680,8 +1723,8 @@ function createTripleCompareTab(cfg) {
       const ranker = lb.percentiles.get(meta.key);
       const lower = lowerIsBetter(meta.key, cfg.statType);
       const exempt = ALWAYS_QUALIFIED_KEYS.has(meta.key);
-      const splitNote = (state.splitKey !== 'season' && SAVANT_SUPPLEMENTAL_KEYS.has(meta.key))
-        ? ` <span class="stat-label-note" title="Full season — Baseball Savant does not support date-range filtering">•</span>` : '';
+      const splitNote = (state.splitKey !== 'season' && FULL_SEASON_ONLY_KEYS.has(meta.key))
+        ? ` <span class="stat-label-note" title="Full season — this metric's source leaderboard doesn't support date-range filtering">•</span>` : '';
 
       const cols = players.map(p => {
         const v = rawValue(p.raw[meta.key], meta.key);
