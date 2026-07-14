@@ -611,7 +611,7 @@ const STAT_GROUPS_HITTING = [
   ]},
   { group: 'Plate Discipline', stats: [
     { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
-    { key: 'O-Z-Swing%', label: 'O-Swing% – Z-Swing%' },
+    { key: 'O-Z-Swing%', label: 'Z-Swing% – O-Swing%' },
     { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
     { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
     { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
@@ -692,7 +692,7 @@ const STAT_GROUPS_PITCHING = [
   ]},
   { group: 'Plate Discipline', stats: [
     { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
-    { key: 'O-Z-Swing%', label: 'O-Swing% – Z-Swing%' },
+    { key: 'O-Z-Swing%', label: 'Z-Swing% – O-Swing%' },
     { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
     { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
     { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
@@ -1028,7 +1028,7 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     // Not in FanGraphs' payload — trivially derived from fields that are.
     const oSwing = rawValue(row['O-Swing%'], 'O-Swing%');
     const zSwing = rawValue(row['Z-Swing%'], 'Z-Swing%');
-    row['O-Z-Swing%'] = (oSwing != null && zSwing != null) ? oSwing - zSwing : null;
+    row['O-Z-Swing%'] = (oSwing != null && zSwing != null) ? zSwing - oSwing : null;
     if (statType === 'bat') {
       // Not in FanGraphs' payload — trivially derived from fields that are.
       row.XBH = (rawValue(row['2B'], '2B') ?? 0) + (rawValue(row['3B'], '3B') ?? 0) + (rawValue(row.HR, 'HR') ?? 0);
