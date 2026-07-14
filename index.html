@@ -306,8 +306,12 @@
           </div>
         </div>
         <div>
-          <div class="field-label">Season</div>
-          <select id="hit-year-select" class="year-select"></select>
+          <div class="field-label">Season A</div>
+          <select id="hit-year-a-select" class="year-select"></select>
+        </div>
+        <div>
+          <div class="field-label">Season B</div>
+          <select id="hit-year-b-select" class="year-select"></select>
         </div>
         <div>
           <div class="field-label">Split</div>
@@ -360,8 +364,12 @@
           </div>
         </div>
         <div>
-          <div class="field-label">Season</div>
-          <select id="pit-year-select" class="year-select"></select>
+          <div class="field-label">Season A</div>
+          <select id="pit-year-a-select" class="year-select"></select>
+        </div>
+        <div>
+          <div class="field-label">Season B</div>
+          <select id="pit-year-b-select" class="year-select"></select>
         </div>
         <div>
           <div class="field-label">Split</div>
@@ -515,6 +523,17 @@ function getSplitOptions(year) {
   });
 }
 
+// When comparing two different seasons, only offer splits valid for BOTH
+// years (e.g. "Last 7 Days" only exists for the current season) — labels and
+// `days` are identical across years for a given key, only the fetch params
+// differ, so it's safe to use yearA's option objects for display.
+function getSplitOptionsIntersect(yearA, yearB) {
+  const optsA = getSplitOptions(yearA);
+  if (yearA === yearB) return optsA;
+  const keysB = new Set(getSplitOptions(yearB).map(o => o.key));
+  return optsA.filter(o => keysB.has(o.key));
+}
+
 // Stats sourced from Baseball Savant (bat-tracking, sprint speed) rather than
 // FanGraphs — Savant's leaderboards don't support date-range filtering, so
 // these always reflect the full season regardless of the selected split.
@@ -534,6 +553,8 @@ function updateURL() {
   if (ctrl) {
     const s = ctrl.getShareState();
     if (s.year) params.set('year', String(s.year));
+    if (s.yearA) params.set('yearA', String(s.yearA));
+    if (s.yearB) params.set('yearB', String(s.yearB));
     if (s.split && s.split !== 'season') params.set('split', s.split);
     (s.players || []).forEach((name, i) => {
       if (name) params.set(String.fromCharCode(97 + i), name); // a, b, c, ...
@@ -588,6 +609,7 @@ const STAT_GROUPS_HITTING = [
   ]},
   { group: 'Plate Discipline', stats: [
     { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
+    { key: 'O-Z-Swing%', label: 'O-Swing% – Z-Swing%' },
     { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
     { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
     { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
@@ -665,6 +687,7 @@ const STAT_GROUPS_PITCHING = [
   ]},
   { group: 'Plate Discipline', stats: [
     { key: 'O-Swing%', label: 'O-Swing%' }, { key: 'Z-Swing%', label: 'Z-Swing%' },
+    { key: 'O-Z-Swing%', label: 'O-Swing% – Z-Swing%' },
     { key: 'Swing%', label: 'Swing%' }, { key: 'O-Contact%', label: 'O-Contact%' },
     { key: 'Z-Contact%', label: 'Z-Contact%' }, { key: 'Contact%', label: 'Contact%' },
     { key: 'Zone%', label: 'Zone%' }, { key: 'F-Strike%', label: 'F-Strike%' },
@@ -699,7 +722,7 @@ const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','SIERA','WHIP','K%','BB%','K-BB%
 // ─── Formatting (ported from fg-scatter's formatStat/displayVal/lowerIsBetter) ─
 const PCT_KEYS = new Set([
   'K%','BB%','K-BB%','LOB%','GB%','FB%','HR/FB','SwStr%','IFFB%','LD%',
-  'O-Swing%','Z-Swing%','Swing%','O-Contact%','Z-Contact%','Contact%','Zone%','F-Strike%',
+  'O-Swing%','Z-Swing%','O-Z-Swing%','Swing%','O-Contact%','Z-Contact%','Contact%','Zone%','F-Strike%',
   'CStr%','C+SwStr%','IFH%','BUH%','TTO%',
   'pfxFA%','pfxFC%','pfxFS%','pfxFO%','pfxSI%','pfxSL%','pfxCU%','pfxKC%','pfxEP%','pfxCH%','pfxKN%','pfxUN%',
   'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%',
@@ -959,6 +982,10 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     if (bt) Object.assign(row, bt);
     const ss = mlbId ? sprintSpeed.get(mlbId) : null;
     if (ss) Object.assign(row, ss);
+    // Not in FanGraphs' payload — trivially derived from fields that are.
+    const oSwing = rawValue(row['O-Swing%'], 'O-Swing%');
+    const zSwing = rawValue(row['Z-Swing%'], 'Z-Swing%');
+    row['O-Z-Swing%'] = (oSwing != null && zSwing != null) ? oSwing - zSwing : null;
     if (statType === 'bat') {
       // Not in FanGraphs' payload — trivially derived from fields that are.
       row.XBH = (rawValue(row['2B'], '2B') ?? 0) + (rawValue(row['3B'], '3B') ?? 0) + (rawValue(row.HR, 'HR') ?? 0);
@@ -1113,11 +1140,11 @@ function headshotUrl(mlbId) {
 }
 function teamLogoUrl(teamId) { return `https://www.mlbstatic.com/team-logos/${teamId}.svg`; }
 
-function renderPlayerHead(el, p, statType) {
+function renderPlayerHead(el, p, statType, year) {
   const volKey = statType === 'bat' ? 'PA' : 'IP';
   const volVal = p.raw[volKey];
   const volLabel = volVal != null ? `${formatStat(volVal, volKey)} ${volKey}` : '';
-  const parts = [p.position, p.teamAbb, volLabel].filter(Boolean);
+  const parts = [p.position, p.teamAbb, year, volLabel].filter(Boolean);
   el.innerHTML = `
     <div class="player-photo-wrap">
       ${p.mlbId ? `<img src="${headshotUrl(p.mlbId)}" alt="${p.name}" onerror="this.style.display='none'">` : ''}
@@ -1134,7 +1161,7 @@ function createCompareTab(cfg) {
   const el = id => document.getElementById(id);
   const aInput = el(cfg.ids.aInput), aDropdownEl = el(cfg.ids.aDropdown);
   const bInput = el(cfg.ids.bInput), bDropdownEl = el(cfg.ids.bDropdown);
-  const yearSelect = el(cfg.ids.yearSelect);
+  const yearASelect = el(cfg.ids.yearASelect), yearBSelect = el(cfg.ids.yearBSelect);
   const customizeBtn = el(cfg.ids.customizeBtn);
   const resetBtn = el(cfg.ids.resetBtn);
   const headA = el(cfg.ids.headA), headB = el(cfg.ids.headB);
@@ -1152,7 +1179,8 @@ function createCompareTab(cfg) {
   const persisted = loadPersisted();
   function savePersisted() {
     localStorage.setItem(cfg.storageKey, JSON.stringify({
-      year: state.year,
+      yearA: state.yearA,
+      yearB: state.yearB,
       splitKey: state.splitKey,
       playerAName: state.playerAName,
       playerBName: state.playerBName,
@@ -1163,15 +1191,23 @@ function createCompareTab(cfg) {
   // URL params (if present, from a shared link) take priority over locally
   // persisted values, but only when the URL's `tab` points at this tab —
   // otherwise the params belong to the other tab and are ignored here.
-  // The metric list is never read from or written to the URL.
+  // The metric list is never read from or written to the URL. `year` is a
+  // legacy single-season param (pre-dates independent A/B seasons) honored
+  // as a fallback for both sides so old shared links still resolve sensibly.
   const urlAppliesHere = URL_PARAMS.get('tab') === cfg.tabName;
-  const urlYear = urlAppliesHere ? parseInt(URL_PARAMS.get('year'), 10) : NaN;
+  const urlLegacyYear = urlAppliesHere ? URL_PARAMS.get('year') : null;
+  const urlYearA = urlAppliesHere ? parseInt(URL_PARAMS.get('yearA') || urlLegacyYear, 10) : NaN;
+  const urlYearB = urlAppliesHere ? parseInt(URL_PARAMS.get('yearB') || urlLegacyYear, 10) : NaN;
   const urlSplit = urlAppliesHere ? URL_PARAMS.get('split') : null;
   const urlA = urlAppliesHere ? URL_PARAMS.get('a') : null;
   const urlB = urlAppliesHere ? URL_PARAMS.get('b') : null;
 
   const state = {
-    year: (!isNaN(urlYear) && YEARS.includes(urlYear)) ? urlYear
+    yearA: (!isNaN(urlYearA) && YEARS.includes(urlYearA)) ? urlYearA
+        : (persisted.yearA && YEARS.includes(persisted.yearA)) ? persisted.yearA
+        : (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
+    yearB: (!isNaN(urlYearB) && YEARS.includes(urlYearB)) ? urlYearB
+        : (persisted.yearB && YEARS.includes(persisted.yearB)) ? persisted.yearB
         : (persisted.year && YEARS.includes(persisted.year)) ? persisted.year : CURRENT_YEAR,
     splitKey: urlSplit || persisted.splitKey || 'season',
     playerA: null, playerB: null,
@@ -1180,22 +1216,22 @@ function createCompareTab(cfg) {
     statKeys: (Array.isArray(persisted.statKeys) && persisted.statKeys.length) ? persisted.statKeys : [...cfg.defaultKeys],
     customizing: false,
   };
-  // Validate the split against what's actually available for this year (e.g.
-  // "Last 7 Days" only exists for the current season).
-  if (!getSplitOptions(state.year).some(o => o.key === state.splitKey)) state.splitKey = 'season';
+  // Validate the split against what's actually available for BOTH seasons
+  // (e.g. "Last 7 Days" only exists for the current season).
+  if (!getSplitOptionsIntersect(state.yearA, state.yearB).some(o => o.key === state.splitKey)) state.splitKey = 'season';
 
-  let current = null; // { lb, pA, pB }
+  let current = null; // { lbA, lbB, pA, pB }
   let draggedKey = null;
   let dragPointerId = null;
   let dragTarget = null; // { key, isAfter }
 
-  function getCurrentSplit() {
-    return getSplitOptions(state.year).find(o => o.key === state.splitKey) || getSplitOptions(state.year)[0];
+  function getSplitFor(year) {
+    return getSplitOptions(year).find(o => o.key === state.splitKey) || getSplitOptions(year)[0];
   }
 
   function syncURL() { updateURL(); }
   tabControllers[cfg.tabName] = {
-    getShareState: () => ({ year: state.year, split: state.splitKey, players: [state.playerAName, state.playerBName] }),
+    getShareState: () => ({ yearA: state.yearA, yearB: state.yearB, split: state.splitKey, players: [state.playerAName, state.playerBName] }),
   };
 
   // Pointer-events based drag reordering (works for mouse, touch, and pen —
@@ -1256,22 +1292,32 @@ function createCompareTab(cfg) {
     contentEl.style.display = (!isLoading && !isError) ? 'block' : 'none';
   }
 
-  function getPlayersForYear() {
-    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}:${state.splitKey}`);
+  function getPlayersForA() {
+    const lb = leaderboardCache.get(`${state.yearA}:${cfg.statType}:${state.splitKey}`);
+    return lb ? [...lb.players.values()] : [];
+  }
+  function getPlayersForB() {
+    const lb = leaderboardCache.get(`${state.yearB}:${cfg.statType}:${state.splitKey}`);
     return lb ? [...lb.players.values()] : [];
   }
 
   async function render() {
     setLoading(true, false);
     try {
-      const lb = await loadLeaderboard(state.year, cfg.statType, cfg.statGroups, getCurrentSplit());
-      let pA = state.playerA ? lb.players.get(state.playerA) : null;
-      let pB = state.playerB ? lb.players.get(state.playerB) : null;
+      const splitA = getSplitFor(state.yearA);
+      const splitB = getSplitFor(state.yearB);
+      const sameYear = state.yearA === state.yearB;
+      const lbAPromise = loadLeaderboard(state.yearA, cfg.statType, cfg.statGroups, splitA);
+      const lbBPromise = sameYear ? lbAPromise : loadLeaderboard(state.yearB, cfg.statType, cfg.statGroups, splitB);
+      const [lbA, lbB] = await Promise.all([lbAPromise, lbBPromise]);
+      let pA = state.playerA ? lbA.players.get(state.playerA) : null;
+      let pB = state.playerB ? lbB.players.get(state.playerB) : null;
       if (!pA || !pB) {
-        const list = [...lb.players.values()];
-        const findByName = (name) => name ? list.find(p => p.name === name) : null;
-        pA = pA || findByName(state.playerAName) || findByName(cfg.defaultA) || list[0];
-        pB = pB || findByName(state.playerBName) || findByName(cfg.defaultB) || list[1] || list[0];
+        const listA = [...lbA.players.values()];
+        const listB = [...lbB.players.values()];
+        const findByName = (list, name) => name ? list.find(p => p.name === name) : null;
+        pA = pA || findByName(listA, state.playerAName) || findByName(listA, cfg.defaultA) || listA[0];
+        pB = pB || findByName(listB, state.playerBName) || findByName(listB, cfg.defaultB) || listB[1] || listB[0];
         state.playerA = pA.id;
         state.playerB = pB.id;
         state.playerAName = pA.name;
@@ -1281,12 +1327,11 @@ function createCompareTab(cfg) {
         savePersisted();
         syncURL();
       }
-      current = { lb, pA, pB };
-      renderPlayerHead(headA, pA, cfg.statType);
-      renderPlayerHead(headB, pB, cfg.statType);
-      const split = getCurrentSplit();
-      splitBadge.textContent = split.label;
-      splitBadge.classList.toggle('visible', split.key !== 'season');
+      current = { lbA, lbB, pA, pB };
+      renderPlayerHead(headA, pA, cfg.statType, sameYear ? null : state.yearA);
+      renderPlayerHead(headB, pB, cfg.statType, sameYear ? null : state.yearB);
+      splitBadge.textContent = splitA.label;
+      splitBadge.classList.toggle('visible', splitA.key !== 'season');
       renderStatsOnly();
       setLoading(false, false);
     } catch (err) {
@@ -1297,16 +1342,18 @@ function createCompareTab(cfg) {
 
   function renderStatsOnly() {
     if (!current) return;
-    const { lb, pA, pB } = current;
-    const splitDays = getCurrentSplit().days;
+    const { lbA, lbB, pA, pB } = current;
+    const splitDaysA = getSplitFor(state.yearA).days;
+    const splitDaysB = getSplitFor(state.yearB).days;
     let html = '';
     for (const key of state.statKeys) {
       const meta = statMeta(key);
       const va = rawValue(pA.raw[meta.key], meta.key);
       const vb = rawValue(pB.raw[meta.key], meta.key);
-      const ranker = lb.percentiles.get(meta.key);
-      let pctA = ranker ? ranker(va) : null;
-      let pctB = ranker ? ranker(vb) : null;
+      const rankerA = lbA.percentiles.get(meta.key);
+      const rankerB = lbB.percentiles.get(meta.key);
+      let pctA = rankerA ? rankerA(va) : null;
+      let pctB = rankerB ? rankerB(vb) : null;
       if (lowerIsBetter(meta.key, cfg.statType)) {
         if (pctA != null) pctA = 100 - pctA;
         if (pctB != null) pctB = 100 - pctB;
@@ -1330,13 +1377,13 @@ function createCompareTab(cfg) {
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
-          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
+          <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysA)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
             <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
-          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
+          <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysB)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
@@ -1401,25 +1448,28 @@ function createCompareTab(cfg) {
     renderStatsOnly();
   });
 
-  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForYear);
-  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForYear);
+  const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForA);
+  const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForB);
 
   el(cfg.ids.swapBtn).addEventListener('click', () => {
     [state.playerA, state.playerB] = [state.playerB, state.playerA];
     [state.playerAName, state.playerBName] = [state.playerBName, state.playerAName];
+    [state.yearA, state.yearB] = [state.yearB, state.yearA];
     savePersisted();
+    yearASelect.value = String(state.yearA);
+    yearBSelect.value = String(state.yearB);
+    populateSplitSelect();
     syncURL();
-    const lb = leaderboardCache.get(`${state.year}:${cfg.statType}:${state.splitKey}`);
-    if (lb) {
-      aDropdown.setValueSilently(lb.players.get(state.playerA));
-      bDropdown.setValueSilently(lb.players.get(state.playerB));
-    }
+    const lbA = leaderboardCache.get(`${state.yearA}:${cfg.statType}:${state.splitKey}`);
+    const lbB = leaderboardCache.get(`${state.yearB}:${cfg.statType}:${state.splitKey}`);
+    if (lbA) aDropdown.setValueSilently(lbA.players.get(state.playerA));
+    if (lbB) bDropdown.setValueSilently(lbB.players.get(state.playerB));
     render();
   });
 
   const splitSelect = el(cfg.ids.splitSelect);
   function populateSplitSelect() {
-    const opts = getSplitOptions(state.year);
+    const opts = getSplitOptionsIntersect(state.yearA, state.yearB);
     if (!opts.some(o => o.key === state.splitKey)) state.splitKey = 'season';
     splitSelect.innerHTML = opts.map(o => `<option value="${o.key}">${o.label}</option>`).join('');
     splitSelect.value = state.splitKey;
@@ -1432,11 +1482,21 @@ function createCompareTab(cfg) {
     render();
   });
 
-  yearSelect.innerHTML = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
-  yearSelect.value = String(state.year);
-  yearSelect.addEventListener('change', () => {
-    state.year = parseInt(yearSelect.value, 10);
+  const yearOptsHtml = YEARS.map(y => `<option value="${y}">${y}</option>`).join('');
+  yearASelect.innerHTML = yearOptsHtml;
+  yearBSelect.innerHTML = yearOptsHtml;
+  yearASelect.value = String(state.yearA);
+  yearBSelect.value = String(state.yearB);
+  yearASelect.addEventListener('change', () => {
+    state.yearA = parseInt(yearASelect.value, 10);
     state.playerA = null;
+    populateSplitSelect();
+    savePersisted();
+    syncURL();
+    render();
+  });
+  yearBSelect.addEventListener('change', () => {
+    state.yearB = parseInt(yearBSelect.value, 10);
     state.playerB = null;
     populateSplitSelect();
     savePersisted();
@@ -1759,7 +1819,7 @@ createCompareTab({
   ids: {
     aInput: 'hit-a-search', aDropdown: 'hit-a-dropdown',
     bInput: 'hit-b-search', bDropdown: 'hit-b-dropdown',
-    swapBtn: 'hit-swap-btn', yearSelect: 'hit-year-select', splitSelect: 'hit-split-select',
+    swapBtn: 'hit-swap-btn', yearASelect: 'hit-year-a-select', yearBSelect: 'hit-year-b-select', splitSelect: 'hit-split-select',
     customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn',
     headA: 'hit-head-a', headB: 'hit-head-b', statsCard: 'hit-stats-card',
     loading: 'hit-loading', error: 'hit-error', content: 'hit-content',
@@ -1777,7 +1837,7 @@ createCompareTab({
   ids: {
     aInput: 'pit-a-search', aDropdown: 'pit-a-dropdown',
     bInput: 'pit-b-search', bDropdown: 'pit-b-dropdown',
-    swapBtn: 'pit-swap-btn', yearSelect: 'pit-year-select', splitSelect: 'pit-split-select',
+    swapBtn: 'pit-swap-btn', yearASelect: 'pit-year-a-select', yearBSelect: 'pit-year-b-select', splitSelect: 'pit-split-select',
     customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn',
     headA: 'pit-head-a', headB: 'pit-head-b', statsCard: 'pit-stats-card',
     loading: 'pit-loading', error: 'pit-error', content: 'pit-content',
