@@ -541,6 +541,7 @@ function getSplitOptionsIntersect(yearA, yearB) {
 const FULL_SEASON_ONLY_KEYS = new Set([
   'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed', 'xwOBACON',
   'DRS', 'OAA',
+  'Hitting+', 'Decision+', 'Timing+', 'Contact+', 'Power+',
 ]);
 
 // Rebuilds the URL query string from the *active* tab's player/season selections
@@ -568,6 +569,11 @@ function updateURL() {
 const FG_PROXY = 'https://fg-proxy.vercel.app/api/fangraphs';
 const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
 
+// Hitting+ (swingplus) engine grades, mirrored into Supabase (table `hitting_plus`)
+// with an MLBAM id so they match FanGraphs rows by xMLBAMID. Full-season only.
+const SUPABASE_URL      = 'https://moflaqmbamyjlpototzt.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1vZmxhcW1iYW15amxwb3RvdHp0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI4MTQxNTcsImV4cCI6MjA4ODM5MDE1N30.udZohxyb0UOxTcSKv_IuBZ7S3DEJxvsMeqgLX6asNrk';
+
 const MLB_TEAM_IDS = {
   ATH:133, PIT:134, SDP:135, SEA:136, SFG:137, STL:138, TBR:139, TEX:140, TOR:141, MIN:142,
   PHI:143, ATL:144, CHW:145, MIA:146, NYY:147, MIL:158, LAA:108, ARI:109, BAL:110, BOS:111,
@@ -584,6 +590,11 @@ const STAT_GROUPS_HITTING = [
     { key: 'xwOBACON', label: 'xwOBACON' },
     { key: 'wRC+', label: 'wRC+' }, { key: 'WAR', label: 'WAR' }, { key: 'RAR', label: 'RAR' },
     { key: 'Batting', label: 'Batting' }, { key: 'Offense', label: 'Offense' },
+  ]},
+  { group: 'Hitting+ (swingplus)', stats: [
+    { key: 'Hitting+', label: 'Hitting+' }, { key: 'Decision+', label: 'Decision+' },
+    { key: 'Timing+', label: 'Timing+' }, { key: 'Contact+', label: 'Contact+' },
+    { key: 'Power+', label: 'Power+' },
   ]},
   { group: 'Counting', stats: [
     { key: 'G', label: 'G' }, { key: 'AB', label: 'AB' }, { key: 'PA', label: 'PA' },
@@ -768,7 +779,8 @@ function formatStat(v, key) {
   if (['ERA','FIP','xFIP','SIERA','xERA','WHIP','HR/9','BB/9','K/9','H/9','K/BB','GB/FB','Spd','BB/K'].includes(key)) return v.toFixed(2);
   if (['WAR','IP','Start-IP','Relief-IP','WPA','-WPA','+WPA','Starting','Relieving','RAR','Batting','Offense',
        'BaseRunning','RE24','Clutch','EV','EV90','LA','maxEV','AttackAngle','BatSpeed','SwingLen','SprintSpeed'].includes(key)) return v.toFixed(1);
-  if (['ERA-','FIP-','xFIP-','sp_stuff','sp_location','sp_pitching','wRC+','AVG+','BB%+','K%+','OBP+','SLG+','ISO+','BABIP+'].includes(key)) return String(Math.round(v));
+  if (['ERA-','FIP-','xFIP-','sp_stuff','sp_location','sp_pitching','wRC+','AVG+','BB%+','K%+','OBP+','SLG+','ISO+','BABIP+',
+       'Hitting+','Decision+','Timing+','Contact+','Power+'].includes(key)) return String(Math.round(v));
   if (key.startsWith('pfxv')) return v.toFixed(1);
   if (key === 'Age') return String(Math.round(v));
   if (COUNTING_KEYS.has(key)) return String(Math.round(v));
@@ -879,6 +891,33 @@ function csvNum(v) {
 }
 
 // Baseball Savant's bat-tracking leaderboard — supplemental to FanGraphs, keyed by MLBAM id.
+// Hitting+ (swingplus) grades from Supabase, keyed by MLBAM id. The engine only
+// publishes full-season grades, so — like bat tracking — this is cached by year
+// alone and reused across every split.
+const hittingPlusCache = new Map(); // year -> Map<mlbId, fields>
+async function loadHittingPlus(year) {
+  if (hittingPlusCache.has(year)) return hittingPlusCache.get(year);
+  const map = new Map();
+  try {
+    const resp = await fetch(
+      `${SUPABASE_URL}/rest/v1/hitting_plus?season=eq.${year}&select=mlbamid,hitting_plus,decision,timing,contact,power`,
+      { headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${SUPABASE_ANON_KEY}` } }
+    );
+    if (resp.ok) {
+      for (const row of await resp.json()) {
+        const id = parseInt(row.mlbamid, 10);
+        if (!id) continue;
+        map.set(id, {
+          'Hitting+': row.hitting_plus, 'Decision+': row.decision, 'Timing+': row.timing,
+          'Contact+': row.contact, 'Power+': row.power,
+        });
+      }
+    }
+  } catch { /* leave empty — grades just won't render */ }
+  hittingPlusCache.set(year, map);
+  return map;
+}
+
 // Always full-season (Savant's leaderboards don't support date-range filtering),
 // so this is cached by year alone and reused across every split.
 const batTrackingCache = new Map(); // `${year}:${savantType}` -> Map<mlbId, fields>
@@ -995,11 +1034,12 @@ async function loadLeaderboard(year, statType, statGroups, split) {
   });
   for (const [k, v] of Object.entries(split.params)) params.set(k, v);
   const savantType = statType === 'bat' ? 'batter' : 'pitcher';
-  const [resp, batTracking, sprintSpeed, fielding] = await Promise.all([
+  const [resp, batTracking, sprintSpeed, fielding, hittingPlus] = await Promise.all([
     fetch(`${FG_PROXY}?${params}`),
     loadBatTracking(year, savantType).catch(() => new Map()),
     statType === 'bat' ? loadSprintSpeed(year).catch(() => new Map()) : Promise.resolve(new Map()),
     statType === 'bat' ? loadFielding(year).catch(() => new Map()) : Promise.resolve(new Map()),
+    statType === 'bat' ? loadHittingPlus(year).catch(() => new Map()) : Promise.resolve(new Map()),
   ]);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const json = await resp.json();
@@ -1025,6 +1065,8 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     if (ss) Object.assign(row, ss);
     const fd = fielding.get(row.playerid);
     if (fd) Object.assign(row, fd);
+    const hp = mlbId ? hittingPlus.get(mlbId) : null;
+    if (hp) Object.assign(row, hp);
     // Not in FanGraphs' payload — trivially derived from fields that are.
     const oSwing = rawValue(row['O-Swing%'], 'O-Swing%');
     const zSwing = rawValue(row['Z-Swing%'], 'Z-Swing%');
