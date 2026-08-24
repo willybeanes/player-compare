@@ -753,7 +753,7 @@ const COUNTING_KEYS = new Set([
 ]);
 const LOWER_IS_BETTER_ALWAYS = new Set(['ERA','FIP','xFIP','SIERA','xERA','WHIP','H/9','BB/9','HR/9','ERA-','FIP-','xFIP-','L','BS','-WPA']);
 const LOWER_IS_BETTER_PITCHING = new Set(['BB%','BABIP','HBP','HR/FB','wOBA','SLG','xwOBA','xSLG','Barrel%','Barrels','HardHit%','EV','maxEV']);
-const LOWER_IS_BETTER_HITTING = new Set(['K%','GDP','CS','SwStr%']);
+const LOWER_IS_BETTER_HITTING = new Set(['K%','GDP','CS','SwStr%','O-Swing%']);
 
 function lowerIsBetter(key, mode) {
   if (LOWER_IS_BETTER_ALWAYS.has(key)) return true;
