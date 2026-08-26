@@ -98,9 +98,28 @@
     .reset-link.visible { display: inline-block; }
 
     .customize-footer {
-      display: flex; justify-content: flex-start; align-items: center; gap: 10px;
+      display: flex; flex-wrap: wrap; justify-content: flex-start; align-items: center; gap: 10px;
       margin-top: 12px;
     }
+
+    .highlight-toggle {
+      display: flex; align-items: center; gap: 7px; margin-left: auto;
+      font-size: 0.8rem; color: #888; cursor: pointer; user-select: none;
+    }
+    .highlight-toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+    .toggle-switch {
+      position: relative; width: 30px; height: 17px; background: #e2ddd5;
+      border-radius: 20px; transition: background 0.15s; flex-shrink: 0;
+    }
+    .toggle-switch::before {
+      content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px;
+      background: #fff; border-radius: 50%; transition: transform 0.15s; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .highlight-toggle input:checked + .toggle-switch { background: #1a1a1a; }
+    .highlight-toggle input:checked + .toggle-switch::before { transform: translateX(13px); }
+    .highlight-toggle:hover { color: #1a1a1a; }
+
+    .stat-value.better { color: #b0392b; }
 
     /* Player header cards */
     .player-heads {
@@ -340,6 +359,11 @@
       <div class="customize-footer">
         <button class="btn" id="hit-customize-btn">Customize</button>
         <button class="reset-link" id="hit-reset-btn">Reset to default</button>
+        <label class="highlight-toggle">
+          <input type="checkbox" id="hit-highlight-toggle" checked>
+          <span class="toggle-switch"></span>
+          <span>Highlight better</span>
+        </label>
       </div>
     </div>
   </div>
@@ -398,6 +422,11 @@
       <div class="customize-footer">
         <button class="btn" id="pit-customize-btn">Customize</button>
         <button class="reset-link" id="pit-reset-btn">Reset to default</button>
+        <label class="highlight-toggle">
+          <input type="checkbox" id="pit-highlight-toggle" checked>
+          <span class="toggle-switch"></span>
+          <span>Highlight better</span>
+        </label>
       </div>
     </div>
   </div>
@@ -459,6 +488,11 @@
       <div class="customize-footer">
         <button class="btn" id="tri-customize-btn">Customize</button>
         <button class="reset-link" id="tri-reset-btn">Reset to default</button>
+        <label class="highlight-toggle">
+          <input type="checkbox" id="tri-highlight-toggle" checked>
+          <span class="toggle-switch"></span>
+          <span>Highlight better</span>
+        </label>
       </div>
     </div>
   </div>
@@ -760,6 +794,37 @@ function lowerIsBetter(key, mode) {
   if (mode === 'pit' && LOWER_IS_BETTER_PITCHING.has(key)) return true;
   if (mode === 'bat' && LOWER_IS_BETTER_HITTING.has(key)) return true;
   return false;
+}
+
+// ─── "Highlight better" toggle — one shared preference across all three tabs ──
+const HIGHLIGHT_KEY = 'player-compare:highlightBetter';
+const highlightListeners = new Set();
+let highlightEnabled = (() => {
+  const saved = localStorage.getItem(HIGHLIGHT_KEY);
+  return saved === null ? true : saved === '1';
+})();
+function setHighlightEnabled(v) {
+  highlightEnabled = v;
+  localStorage.setItem(HIGHLIGHT_KEY, v ? '1' : '0');
+  highlightListeners.forEach(fn => fn());
+}
+function onHighlightChange(fn) { highlightListeners.add(fn); }
+// Which side has the better raw value for this stat, direction-aware. Null on
+// a missing value or an exact tie (nothing to highlight).
+function betterSide(va, vb, lower) {
+  if (va == null || vb == null || va === vb) return null;
+  return lower ? (va < vb ? 'a' : 'b') : (va > vb ? 'a' : 'b');
+}
+// Index of the uniquely-best value in a list (3+ players), direction-aware.
+// Returns -1 when everything's null or the top spot is tied.
+function bestIndex(vals, lower) {
+  let bestI = -1, bestV = null, tied = false;
+  vals.forEach((v, i) => {
+    if (v == null) return;
+    if (bestV == null || (lower ? v < bestV : v > bestV)) { bestV = v; bestI = i; tied = false; }
+    else if (v === bestV) { tied = true; }
+  });
+  return tied ? -1 : bestI;
 }
 
 // Convert a raw FanGraphs value for ranking/display: null counting stats -> 0.
@@ -1249,6 +1314,7 @@ function createCompareTab(cfg) {
   const yearASelect = el(cfg.ids.yearASelect), yearBSelect = el(cfg.ids.yearBSelect);
   const customizeBtn = el(cfg.ids.customizeBtn);
   const resetBtn = el(cfg.ids.resetBtn);
+  const highlightToggle = el(cfg.ids.highlightToggle);
   const headA = el(cfg.ids.headA), headB = el(cfg.ids.headB);
   const splitBadge = headA.closest('.player-heads').querySelector('.split-badge');
   const statsCard = el(cfg.ids.statsCard);
@@ -1458,10 +1524,11 @@ function createCompareTab(cfg) {
       const centerB = widthB / 2;
       const splitNote = (state.splitKey !== 'season' && FULL_SEASON_ONLY_KEYS.has(meta.key))
         ? ` <span class="stat-label-note" title="Full season — this metric's source leaderboard doesn't support date-range filtering">•</span>` : '';
+      const winner = highlightEnabled ? betterSide(va, vb, lowerIsBetter(meta.key, cfg.statType)) : null;
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
-          <div class="stat-value a ${fa == null ? 'dim' : ''}">${fa ?? '—'}</div>
+          <div class="stat-value a ${fa == null ? 'dim' : ''}${winner === 'a' ? ' better' : ''}">${fa ?? '—'}</div>
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysA)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
@@ -1469,7 +1536,7 @@ function createCompareTab(cfg) {
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
           <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysB)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
-          <div class="stat-value b ${fb == null ? 'dim' : ''}">${fb ?? '—'}</div>
+          <div class="stat-value b ${fb == null ? 'dim' : ''}${winner === 'b' ? ' better' : ''}">${fb ?? '—'}</div>
         </div>`;
     }
     if (state.customizing) {
@@ -1532,6 +1599,10 @@ function createCompareTab(cfg) {
     savePersisted();
     renderStatsOnly();
   });
+
+  highlightToggle.checked = highlightEnabled;
+  highlightToggle.addEventListener('change', () => setHighlightEnabled(highlightToggle.checked));
+  onHighlightChange(() => { highlightToggle.checked = highlightEnabled; renderStatsOnly(); });
 
   const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForA);
   const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForB);
@@ -1606,6 +1677,7 @@ function createTripleCompareTab(cfg) {
   const yearSelect = el(cfg.ids.yearSelect);
   const customizeBtn = el(cfg.ids.customizeBtn);
   const resetBtn = el(cfg.ids.resetBtn);
+  const highlightToggle = el(cfg.ids.highlightToggle);
   const splitBadge = headEls[0].closest('.card').querySelector('.split-badge');
   const statsCard = el(cfg.ids.statsCard);
   const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
@@ -1768,8 +1840,10 @@ function createTripleCompareTab(cfg) {
       const splitNote = (state.splitKey !== 'season' && FULL_SEASON_ONLY_KEYS.has(meta.key))
         ? ` <span class="stat-label-note" title="Full season — this metric's source leaderboard doesn't support date-range filtering">•</span>` : '';
 
-      const cols = players.map(p => {
-        const v = rawValue(p.raw[meta.key], meta.key);
+      const rawVals = players.map(p => rawValue(p.raw[meta.key], meta.key));
+      const winnerIdx = highlightEnabled ? bestIndex(rawVals, lower) : -1;
+      const cols = players.map((p, i) => {
+        const v = rawVals[i];
         let pct = ranker ? ranker(v) : null;
         if (lower && pct != null) pct = 100 - pct;
         const f = formatStat(v, meta.key);
@@ -1780,7 +1854,7 @@ function createTripleCompareTab(cfg) {
         return `
           <div class="tri-col">
             <div class="bar-track uni"><div class="bar-fill${unqual ? ' unqualified' : ''}" style="width:${width}%;background-color:${color}" title="${unqual ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${barLabel ? `<span class="bar-value-label" style="left:${width / 2}%">${barLabel}</span>` : ''}</div>
-            <div class="stat-value ${f == null ? 'dim' : ''}">${f ?? '—'}</div>
+            <div class="stat-value ${f == null ? 'dim' : ''}${i === winnerIdx ? ' better' : ''}">${f ?? '—'}</div>
           </div>`;
       }).join('');
 
@@ -1855,6 +1929,10 @@ function createTripleCompareTab(cfg) {
     renderStatsOnly();
   });
 
+  highlightToggle.checked = highlightEnabled;
+  highlightToggle.addEventListener('change', () => setHighlightEnabled(highlightToggle.checked));
+  onHighlightChange(() => { highlightToggle.checked = highlightEnabled; renderStatsOnly(); });
+
   const dropdowns = inputs.map((inputEl, i) =>
     buildDropdown(inputEl, dropdownEls[i], (p) => {
       state.players[i] = { id: p.id, name: p.name };
@@ -1905,7 +1983,7 @@ createCompareTab({
     aInput: 'hit-a-search', aDropdown: 'hit-a-dropdown',
     bInput: 'hit-b-search', bDropdown: 'hit-b-dropdown',
     swapBtn: 'hit-swap-btn', yearASelect: 'hit-year-a-select', yearBSelect: 'hit-year-b-select', splitSelect: 'hit-split-select',
-    customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn',
+    customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn', highlightToggle: 'hit-highlight-toggle',
     headA: 'hit-head-a', headB: 'hit-head-b', statsCard: 'hit-stats-card',
     loading: 'hit-loading', error: 'hit-error', content: 'hit-content',
   },
@@ -1923,7 +2001,7 @@ createCompareTab({
     aInput: 'pit-a-search', aDropdown: 'pit-a-dropdown',
     bInput: 'pit-b-search', bDropdown: 'pit-b-dropdown',
     swapBtn: 'pit-swap-btn', yearASelect: 'pit-year-a-select', yearBSelect: 'pit-year-b-select', splitSelect: 'pit-split-select',
-    customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn',
+    customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn', highlightToggle: 'pit-highlight-toggle',
     headA: 'pit-head-a', headB: 'pit-head-b', statsCard: 'pit-stats-card',
     loading: 'pit-loading', error: 'pit-error', content: 'pit-content',
   },
@@ -1942,7 +2020,7 @@ createTripleCompareTab({
     dropdowns: ['tri-a-dropdown', 'tri-b-dropdown', 'tri-c-dropdown'],
     heads: ['tri-head-a', 'tri-head-b', 'tri-head-c'],
     yearSelect: 'tri-year-select', splitSelect: 'tri-split-select',
-    customizeBtn: 'tri-customize-btn', resetBtn: 'tri-reset-btn', addBtn: 'tri-add-stat-btn',
+    customizeBtn: 'tri-customize-btn', resetBtn: 'tri-reset-btn', addBtn: 'tri-add-stat-btn', highlightToggle: 'tri-highlight-toggle',
     statsCard: 'tri-stats-card', loading: 'tri-loading', error: 'tri-error', content: 'tri-content',
   },
 });
