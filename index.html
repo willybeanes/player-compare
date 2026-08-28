@@ -16,6 +16,8 @@
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+    :root { --player-a-color: #3f8f83; --player-b-color: #c9772e; }
+
     body {
       font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       background: #f0ede8;
@@ -123,6 +125,36 @@
       background: #ffe066; border-radius: 3px; padding: 1px 4px; margin: -1px -4px;
       box-decoration-break: clone; -webkit-box-decoration-break: clone;
     }
+
+    /* Horizontal / Vertical compare-layout switch */
+    .view-switch { display: flex; border: 1px solid #d8d5d0; border-radius: 8px; overflow: hidden; }
+    .view-switch .view-btn {
+      background: #fff; border: none; color: #777; font-family: inherit; font-size: 0.8rem;
+      padding: 7px 11px; cursor: pointer; line-height: 1; transition: background 0.15s, color 0.15s;
+    }
+    .view-switch .view-btn + .view-btn { border-left: 1px solid #d8d5d0; }
+    .view-switch .view-btn.active { background: #1a1a1a; color: #fff; }
+    .view-switch .view-btn:not(.active):hover { background: #f5f2ee; color: #1a1a1a; }
+
+    /* Vertical compare: stats grouped per metric, each player's bar in its own
+       row (both growing left-to-right) colored by player identity rather than
+       by percentile — position already carries meaning, so color doesn't need to. */
+    .v-legend { display: flex; gap: 18px; padding: 2px 0 12px; font-size: 0.78rem; color: #666; }
+    .v-legend-item { display: flex; align-items: center; gap: 6px; }
+    .v-legend-item .swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
+    .v-legend-item.a .swatch { background: var(--player-a-color); }
+    .v-legend-item.b .swatch { background: var(--player-b-color); }
+    /* .stat-row-v overrides the base .stat-row grid with a stacked block
+       layout, while keeping .stat-row so the existing editable/drag-reorder
+       styling and JS (which target .stat-row) keep working unmodified. */
+    .stat-row.stat-row-v { display: block; padding: 7px 0; border-bottom: 1px solid #f0ede8; }
+    .stat-row.stat-row-v:last-child { border-bottom: none; }
+    .stat-row-v .stat-label-wrap { justify-content: flex-start; padding: 0 0 5px; }
+    .stat-row-v .stat-label { text-align: left; }
+    .v-bars { display: flex; flex-direction: column; gap: 4px; }
+    .v-bar-row { display: flex; align-items: center; gap: 8px; }
+    .v-bar-row .bar-track { flex: 1; }
+    .v-bar-row .stat-value { flex-shrink: 0; min-width: 52px; text-align: right; font-size: 0.82rem; }
 
     /* Player header cards */
     .player-heads {
@@ -362,6 +394,10 @@
       <div class="customize-footer">
         <button class="btn" id="hit-customize-btn">Customize</button>
         <button class="reset-link" id="hit-reset-btn">Reset to default</button>
+        <div class="view-switch" id="hit-view-switch">
+          <button class="view-btn active" data-view="horizontal">Horizontal</button>
+          <button class="view-btn" data-view="vertical">Vertical</button>
+        </div>
         <label class="highlight-toggle">
           <input type="checkbox" id="hit-highlight-toggle" checked>
           <span class="toggle-switch"></span>
@@ -425,6 +461,10 @@
       <div class="customize-footer">
         <button class="btn" id="pit-customize-btn">Customize</button>
         <button class="reset-link" id="pit-reset-btn">Reset to default</button>
+        <div class="view-switch" id="pit-view-switch">
+          <button class="view-btn active" data-view="horizontal">Horizontal</button>
+          <button class="view-btn" data-view="vertical">Vertical</button>
+        </div>
         <label class="highlight-toggle">
           <input type="checkbox" id="pit-highlight-toggle" checked>
           <span class="toggle-switch"></span>
@@ -814,6 +854,22 @@ function setHighlightEnabled(v) {
   highlightListeners.forEach(fn => fn());
 }
 function onHighlightChange(fn) { highlightListeners.add(fn); }
+
+// ─── Horizontal / Vertical compare layout — shared across the two 2-player
+// tabs (hitter, pitcher); the 3-player tab only ever renders one way. ───────
+const VIEW_KEY = 'player-compare:compareView';
+const viewListeners = new Set();
+let compareView = (() => {
+  const saved = localStorage.getItem(VIEW_KEY);
+  return saved === 'vertical' ? 'vertical' : 'horizontal';
+})();
+function setCompareView(v) {
+  compareView = v;
+  localStorage.setItem(VIEW_KEY, v);
+  viewListeners.forEach(fn => fn());
+}
+function onViewChange(fn) { viewListeners.add(fn); }
+
 // Which side has the better raw value for this stat, direction-aware. Null on
 // a missing value or an exact tie (nothing to highlight).
 function betterSide(va, vb, lower) {
@@ -1355,8 +1411,10 @@ function createCompareTab(cfg) {
   const customizeBtn = el(cfg.ids.customizeBtn);
   const resetBtn = el(cfg.ids.resetBtn);
   const highlightToggle = el(cfg.ids.highlightToggle);
+  const viewSwitchEl = el(cfg.ids.viewSwitch);
   const headA = el(cfg.ids.headA), headB = el(cfg.ids.headB);
   const splitBadge = headA.closest('.player-heads').querySelector('.split-badge');
+  const card = headA.closest('.card');
   const statsCard = el(cfg.ids.statsCard);
   const loadingEl = el(cfg.ids.loading), errorEl = el(cfg.ids.error), contentEl = el(cfg.ids.content);
 
@@ -1565,22 +1623,42 @@ function createCompareTab(cfg) {
       const splitNote = (state.splitKey !== 'season' && FULL_SEASON_ONLY_KEYS.has(meta.key))
         ? ` <span class="stat-label-note" title="Full season — this metric's source leaderboard doesn't support date-range filtering">•</span>` : '';
       const winner = highlightEnabled ? betterSide(va, vb, lowerIsBetter(meta.key, cfg.statType)) : null;
+      const labelWrap = `
+            ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
+            <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
+            ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}`;
 
-      html += `
+      if (compareView === 'vertical') {
+        // Position (top row = A, bottom row = B) carries player identity, so
+        // bars use a fixed per-player color instead of the percentile scale.
+        html += `
+        <div class="stat-row stat-row-v${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
+          <div class="stat-label-wrap">${labelWrap}</div>
+          <div class="v-bars">
+            <div class="v-bar-row a"><div class="bar-track uni"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:var(--player-a-color)" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysA)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${widthA / 2}%">${labelA}</span>` : ''}</div><div class="stat-value ${fa == null ? 'dim' : ''}"><span class="value-hl${winner === 'a' ? ' better' : ''}">${fa ?? '—'}</span></div></div>
+            <div class="v-bar-row b"><div class="bar-track uni"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:var(--player-b-color)" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysB)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${widthB / 2}%">${labelB}</span>` : ''}</div><div class="stat-value ${fb == null ? 'dim' : ''}"><span class="value-hl${winner === 'b' ? ' better' : ''}">${fb ?? '—'}</span></div></div>
+          </div>
+        </div>`;
+      } else {
+        html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
           <div class="stat-value a ${fa == null ? 'dim' : ''}"><span class="value-hl${winner === 'a' ? ' better' : ''}">${fa ?? '—'}</span></div>
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysA)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
-          <div class="stat-label-wrap">
-            ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
-            <span class="stat-label" data-action="pick">${meta.label}${splitNote}</span>
-            ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
-          </div>
+          <div class="stat-label-wrap">${labelWrap}</div>
           <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysB)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
           <div class="stat-value b ${fb == null ? 'dim' : ''}"><span class="value-hl${winner === 'b' ? ' better' : ''}">${fb ?? '—'}</span></div>
         </div>`;
+      }
     }
     if (state.customizing) {
       html += `<button class="add-stat-btn" id="${cfg.ids.addBtn}">+ Add metric</button>`;
+    }
+    if (compareView === 'vertical') {
+      html = `
+        <div class="v-legend">
+          <span class="v-legend-item a"><i class="swatch"></i>${pA.name}</span>
+          <span class="v-legend-item b"><i class="swatch"></i>${pB.name}</span>
+        </div>` + html;
     }
     statsCard.innerHTML = html;
     if (state.customizing) wireEditableRows();
@@ -1643,6 +1721,16 @@ function createCompareTab(cfg) {
   highlightToggle.checked = highlightEnabled;
   highlightToggle.addEventListener('change', () => setHighlightEnabled(highlightToggle.checked));
   onHighlightChange(() => { highlightToggle.checked = highlightEnabled; renderStatsOnly(); });
+
+  function syncViewButtons() {
+    viewSwitchEl.querySelectorAll('.view-btn').forEach(b => b.classList.toggle('active', b.dataset.view === compareView));
+    card.classList.toggle('view-vertical', compareView === 'vertical');
+  }
+  viewSwitchEl.querySelectorAll('.view-btn').forEach(btn => {
+    btn.addEventListener('click', () => setCompareView(btn.dataset.view));
+  });
+  syncViewButtons();
+  onViewChange(() => { syncViewButtons(); renderStatsOnly(); });
 
   const aDropdown = buildDropdown(aInput, aDropdownEl, (p) => { state.playerA = p.id; state.playerAName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForA);
   const bDropdown = buildDropdown(bInput, bDropdownEl, (p) => { state.playerB = p.id; state.playerBName = p.name; savePersisted(); syncURL(); render(); }, getPlayersForB);
@@ -2023,7 +2111,7 @@ createCompareTab({
     aInput: 'hit-a-search', aDropdown: 'hit-a-dropdown',
     bInput: 'hit-b-search', bDropdown: 'hit-b-dropdown',
     swapBtn: 'hit-swap-btn', yearASelect: 'hit-year-a-select', yearBSelect: 'hit-year-b-select', splitSelect: 'hit-split-select',
-    customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn', highlightToggle: 'hit-highlight-toggle',
+    customizeBtn: 'hit-customize-btn', resetBtn: 'hit-reset-btn', addBtn: 'hit-add-stat-btn', highlightToggle: 'hit-highlight-toggle', viewSwitch: 'hit-view-switch',
     headA: 'hit-head-a', headB: 'hit-head-b', statsCard: 'hit-stats-card',
     loading: 'hit-loading', error: 'hit-error', content: 'hit-content',
   },
@@ -2041,7 +2129,7 @@ createCompareTab({
     aInput: 'pit-a-search', aDropdown: 'pit-a-dropdown',
     bInput: 'pit-b-search', bDropdown: 'pit-b-dropdown',
     swapBtn: 'pit-swap-btn', yearASelect: 'pit-year-a-select', yearBSelect: 'pit-year-b-select', splitSelect: 'pit-split-select',
-    customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn', highlightToggle: 'pit-highlight-toggle',
+    customizeBtn: 'pit-customize-btn', resetBtn: 'pit-reset-btn', addBtn: 'pit-add-stat-btn', highlightToggle: 'pit-highlight-toggle', viewSwitch: 'pit-view-switch',
     headA: 'pit-head-a', headB: 'pit-head-b', statsCard: 'pit-stats-card',
     loading: 'pit-loading', error: 'pit-error', content: 'pit-content',
   },
