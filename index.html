@@ -119,7 +119,10 @@
     .highlight-toggle input:checked + .toggle-switch::before { transform: translateX(13px); }
     .highlight-toggle:hover { color: #1a1a1a; }
 
-    .stat-value.better { color: #b0392b; }
+    .value-hl.better {
+      background: #ffe066; border-radius: 3px; padding: 1px 4px; margin: -1px -4px;
+      box-decoration-break: clone; -webkit-box-decoration-break: clone;
+    }
 
     /* Player header cards */
     .player-heads {
@@ -1565,7 +1568,7 @@ function createCompareTab(cfg) {
 
       html += `
         <div class="stat-row${state.customizing ? ' editable' : ''}" data-key="${meta.key}">
-          <div class="stat-value a ${fa == null ? 'dim' : ''}${winner === 'a' ? ' better' : ''}">${fa ?? '—'}</div>
+          <div class="stat-value a ${fa == null ? 'dim' : ''}"><span class="value-hl${winner === 'a' ? ' better' : ''}">${fa ?? '—'}</span></div>
           <div class="bar-track a"><div class="bar-fill${unqualA ? ' unqualified' : ''}" style="width:${widthA}%;background-color:${colorA}" title="${unqualA ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysA)})` : ''}"></div>${labelA ? `<span class="bar-value-label" style="left:${centerA}%">${labelA}</span>` : ''}</div>
           <div class="stat-label-wrap">
             ${state.customizing ? `<span class="stat-drag-handle" title="Drag to reorder">⠿</span>` : ''}
@@ -1573,7 +1576,7 @@ function createCompareTab(cfg) {
             ${state.customizing ? `<button class="stat-remove" data-action="remove" title="Remove">×</button>` : ''}
           </div>
           <div class="bar-track b"><div class="bar-fill${unqualB ? ' unqualified' : ''}" style="width:${widthB}%;background-color:${colorB}" title="${unqualB ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDaysB)})` : ''}"></div>${labelB ? `<span class="bar-value-label" style="left:${centerB}%">${labelB}</span>` : ''}</div>
-          <div class="stat-value b ${fb == null ? 'dim' : ''}${winner === 'b' ? ' better' : ''}">${fb ?? '—'}</div>
+          <div class="stat-value b ${fb == null ? 'dim' : ''}"><span class="value-hl${winner === 'b' ? ' better' : ''}">${fb ?? '—'}</span></div>
         </div>`;
     }
     if (state.customizing) {
@@ -1891,7 +1894,7 @@ function createTripleCompareTab(cfg) {
         return `
           <div class="tri-col">
             <div class="bar-track uni"><div class="bar-fill${unqual ? ' unqualified' : ''}" style="width:${width}%;background-color:${color}" title="${unqual ? `Small sample (under ${sampleFloorLabel(cfg.statType, splitDays)})` : ''}"></div>${barLabel ? `<span class="bar-value-label" style="left:${width / 2}%">${barLabel}</span>` : ''}</div>
-            <div class="stat-value ${f == null ? 'dim' : ''}${i === winnerIdx ? ' better' : ''}">${f ?? '—'}</div>
+            <div class="stat-value ${f == null ? 'dim' : ''}"><span class="value-hl${i === winnerIdx ? ' better' : ''}">${f ?? '—'}</span></div>
           </div>`;
       }).join('');
 
