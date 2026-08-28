@@ -144,14 +144,15 @@
     .v-legend-item .swatch { width: 9px; height: 9px; border-radius: 50%; flex-shrink: 0; }
     .v-legend-item.a .swatch { background: var(--player-a-color); }
     .v-legend-item.b .swatch { background: var(--player-b-color); }
-    /* .stat-row-v overrides the base .stat-row grid with a stacked block
-       layout, while keeping .stat-row so the existing editable/drag-reorder
-       styling and JS (which target .stat-row) keep working unmodified. */
-    .stat-row.stat-row-v { display: block; padding: 7px 0; border-bottom: 1px solid #f0ede8; }
+    /* .stat-row-v overrides the base .stat-row grid with a compact layout —
+       label on the left, both players' bars stacked in a column to its right
+       — while keeping .stat-row so the existing editable/drag-reorder styling
+       and JS (which target .stat-row) keep working unmodified. */
+    .stat-row.stat-row-v { display: flex; align-items: center; gap: 10px; padding: 7px 0; border-bottom: 1px solid #f0ede8; }
     .stat-row.stat-row-v:last-child { border-bottom: none; }
-    .stat-row-v .stat-label-wrap { justify-content: flex-start; padding: 0 0 5px; }
+    .stat-row-v .stat-label-wrap { flex: 0 0 96px; justify-content: flex-start; padding: 0; }
     .stat-row-v .stat-label { text-align: left; }
-    .v-bars { display: flex; flex-direction: column; gap: 4px; }
+    .v-bars { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
     .v-bar-row { display: flex; align-items: center; gap: 8px; }
     .v-bar-row .bar-track { flex: 1; }
     .v-bar-row .stat-value { flex-shrink: 0; min-width: 52px; text-align: right; font-size: 0.82rem; }
@@ -323,6 +324,10 @@
       .stat-row-3 { grid-template-columns: 56px repeat(3, 1fr); gap: 4px; }
       .tri-col { gap: 3px; }
       .tri-col .stat-value { min-width: 30px; font-size: 0.62rem; }
+      .stat-row.stat-row-v { gap: 6px; }
+      .stat-row-v .stat-label-wrap { flex-basis: 62px; }
+      .stat-row-v .stat-label { font-size: 0.62rem; }
+      .v-bar-row .stat-value { min-width: 40px; font-size: 0.7rem; }
     }
   </style>
 </head>
