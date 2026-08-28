@@ -574,7 +574,7 @@ function getSplitOptionsIntersect(yearA, yearB) {
 // filtering, so they always reflect the full season regardless of split.
 const FULL_SEASON_ONLY_KEYS = new Set([
   'BatSpeed', 'FastSwing%', 'Blasts/C', 'Blasts/Sw', 'SqUp/C', 'SqUp/Sw', 'SwingLen', 'Swords', 'SprintSpeed', 'xwOBACON',
-  'DRS', 'OAA',
+  'DRS', 'OAA', 'PulledFB%',
   'Hitting+', 'Decision+', 'Timing+', 'Contact+', 'Power+',
 ]);
 
@@ -648,6 +648,7 @@ const STAT_GROUPS_HITTING = [
     { key: 'GB/FB', label: 'GB/FB' }, { key: 'GB%', label: 'GB%' }, { key: 'FB%', label: 'FB%' },
     { key: 'LD%', label: 'LD%' }, { key: 'IFFB%', label: 'IFFB%' }, { key: 'HR/FB', label: 'HR/FB' },
     { key: 'Pull%', label: 'Pull%' }, { key: 'Cent%', label: 'Cent%' }, { key: 'Oppo%', label: 'Oppo%' },
+    { key: 'PulledFB%', label: 'Pulled FB%' },
     { key: 'Soft%', label: 'Soft%' }, { key: 'Med%', label: 'Med%' }, { key: 'Hard%', label: 'Hard%' },
   ]},
   { group: 'Win Probability', stats: [
@@ -721,6 +722,7 @@ const STAT_GROUPS_PITCHING = [
     { key: 'GB/FB', label: 'GB/FB' }, { key: 'GB%', label: 'GB%' }, { key: 'FB%', label: 'FB%' },
     { key: 'LD%', label: 'LD%' }, { key: 'IFFB%', label: 'IFFB%' },
     { key: 'IFH%', label: 'IFH%' }, { key: 'BUH%', label: 'BUH%' },
+    { key: 'PulledFB%', label: 'Pulled FB% (Against)' },
   ]},
   { group: 'Quality of Contact (Against)', stats: [
     { key: 'Barrel%', label: 'Barrel/BBE%' }, { key: 'Barrels', label: 'Barrels' },
@@ -766,7 +768,7 @@ const STAT_GROUPS_PITCHING = [
   ]},
 ];
 
-const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OPS','HR','SB','xwOBA','xSLG','EV90','FB%','Barrel%','HardHit%','K%','BB%','SwStr%','O-Swing%','BatSpeed','SprintSpeed'];
+const DEFAULT_HITTER_KEYS = ['WAR','wRC+','AVG','OPS','HR','SB','xwOBA','xSLG','EV90','FB%','Barrel%','HardHit%','K%','BB%','SwStr%','O-Z-Swing%','Hitting+','Power+','Contact+','BatSpeed','SprintSpeed'];
 const DEFAULT_PITCHER_KEYS = ['WAR','ERA','FIP','SIERA','WHIP','K%','BB%','K-BB%','HardHit%','sp_stuff','sp_location','sp_pitching','pfxvFA','SwStr%','O-Swing%'];
 
 // ─── Formatting (ported from fg-scatter's formatStat/displayVal/lowerIsBetter) ─
@@ -775,7 +777,7 @@ const PCT_KEYS = new Set([
   'O-Swing%','Z-Swing%','O-Z-Swing%','Swing%','O-Contact%','Z-Contact%','Contact%','Zone%','F-Strike%',
   'CStr%','C+SwStr%','IFH%','BUH%','TTO%',
   'pfxFA%','pfxFC%','pfxFS%','pfxFO%','pfxSI%','pfxSL%','pfxCU%','pfxKC%','pfxEP%','pfxCH%','pfxKN%','pfxUN%',
-  'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%',
+  'Pull%','Cent%','Oppo%','Soft%','Med%','Hard%','PulledFB%',
   'Barrel%','HardHit%','FastSwing%','Blasts/C','Blasts/Sw','SqUp/C','SqUp/Sw',
 ]);
 const SLASH_KEYS = new Set(['AVG','OBP','SLG','OPS','ISO','wOBA','xwOBA','xSLG','xwOBACON','BABIP']);
@@ -1021,6 +1023,38 @@ async function loadBatTrackingUncached(year, savantType) {
   return map;
 }
 
+// Baseball Savant's batted-ball-direction leaderboard — Pulled FB% (their
+// "pull_air_rate": share of batted balls that are both pulled AND in the air,
+// FB+LD), which neither FanGraphs nor the bat-tracking leaderboard exposes.
+// Supplemental to FanGraphs, keyed by MLBAM id. Always full-season; cached by
+// year alone and reused across every split.
+const battedBallCache = new Map(); // `${year}:${savantType}` -> Map<mlbId, fields>
+async function loadBattedBall(year, savantType) {
+  const cacheKey = `${year}:${savantType}`;
+  if (battedBallCache.has(cacheKey)) return battedBallCache.get(cacheKey);
+  const result = await loadBattedBallUncached(year, savantType);
+  battedBallCache.set(cacheKey, result);
+  return result;
+}
+async function loadBattedBallUncached(year, savantType) {
+  const params = new URLSearchParams({
+    path: '/leaderboard/batted-ball', type: savantType, year: String(year),
+    pitchType: 'all', filterType: 'bip', min: '1', csv: 'true',
+  });
+  const resp = await fetch(`${SAVANT_PROXY}?${params}`);
+  if (!resp.ok) return new Map();
+  const text = await resp.text();
+  if (text.trim().startsWith('<')) return new Map();
+  const rows = parseCSV(text);
+  const map = new Map();
+  for (const row of rows) {
+    const id = parseInt(row.id, 10);
+    if (!id) continue;
+    map.set(id, { 'PulledFB%': csvNum(row.pull_air_rate) });
+  }
+  return map;
+}
+
 // Baseball Savant's custom leaderboard — Sprint Speed (Statcast-measured
 // ft/sec) and xwOBACON, neither of which FanGraphs exposes. Supplemental to
 // FanGraphs, keyed by MLBAM id. Hitters only. Always full-season; cached by
@@ -1099,9 +1133,10 @@ async function loadLeaderboard(year, statType, statGroups, split) {
   });
   for (const [k, v] of Object.entries(split.params)) params.set(k, v);
   const savantType = statType === 'bat' ? 'batter' : 'pitcher';
-  const [resp, batTracking, sprintSpeed, fielding, hittingPlus] = await Promise.all([
+  const [resp, batTracking, battedBall, sprintSpeed, fielding, hittingPlus] = await Promise.all([
     fetch(`${FG_PROXY}?${params}`),
     loadBatTracking(year, savantType).catch(() => new Map()),
+    loadBattedBall(year, savantType).catch(() => new Map()),
     statType === 'bat' ? loadSprintSpeed(year).catch(() => new Map()) : Promise.resolve(new Map()),
     statType === 'bat' ? loadFielding(year).catch(() => new Map()) : Promise.resolve(new Map()),
     statType === 'bat' ? loadHittingPlus(year).catch(() => new Map()) : Promise.resolve(new Map()),
@@ -1126,6 +1161,8 @@ async function loadLeaderboard(year, statType, statGroups, split) {
     const mlbId = row.xMLBAMID || null;
     const bt = mlbId ? batTracking.get(mlbId) : null;
     if (bt) Object.assign(row, bt);
+    const bb = mlbId ? battedBall.get(mlbId) : null;
+    if (bb) Object.assign(row, bb);
     const ss = mlbId ? sprintSpeed.get(mlbId) : null;
     if (ss) Object.assign(row, ss);
     const fd = fielding.get(row.playerid);
