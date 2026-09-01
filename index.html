@@ -714,6 +714,7 @@ function updateURL() {
   }
   const qs = params.toString();
   history.replaceState(null, '', qs ? `?${qs}` : window.location.pathname);
+  try { window.parent.postMessage({ type: 'bh:urlSync', search: qs ? `?${qs}` : '' }, '*'); } catch(_) {}
 }
 const FG_PROXY = 'https://fg-proxy.vercel.app/api/fangraphs';
 const SAVANT_PROXY = 'https://fg-proxy.vercel.app/api/savant';
