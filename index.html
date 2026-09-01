@@ -340,10 +340,77 @@
     <button class="tab-btn active" data-tab="hitter">Hitter Compare</button>
     <button class="tab-btn" data-tab="pitcher">Pitcher Compare</button>
     <button class="tab-btn" data-tab="3hitter">3 Hitter Compare</button>
+    <button class="tab-btn" data-tab="3pitcher">3 Pitcher Compare</button>
   </nav>
 </header>
 
 <div class="container">
+
+  <!-- 3-PITCHER TAB -->
+  <div id="tab-3pitcher" class="tab-panel">
+    <div class="card">
+      <div class="toolbar">
+        <div>
+          <div class="field-label">Player A</div>
+          <div class="select-wrap" id="trip-a-select-wrap">
+            <input type="text" id="trip-a-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="trip-a-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Player B</div>
+          <div class="select-wrap" id="trip-b-select-wrap">
+            <input type="text" id="trip-b-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="trip-b-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Player C</div>
+          <div class="select-wrap" id="trip-c-select-wrap">
+            <input type="text" id="trip-c-search" placeholder="Search player…" autocomplete="off">
+            <div class="dropdown-list" id="trip-c-dropdown"></div>
+          </div>
+        </div>
+        <div>
+          <div class="field-label">Season</div>
+          <select id="trip-year-select" class="year-select"></select>
+        </div>
+        <div>
+          <div class="field-label">Split</div>
+          <select id="trip-split-select" class="year-select"></select>
+        </div>
+      </div>
+    </div>
+
+    <div id="trip-loading" class="state-overlay">
+      <div class="spinner"></div>
+      <span>Loading data…</span>
+    </div>
+    <div id="trip-error" class="state-overlay" style="display:none">
+      <div class="error-box"><strong>Couldn't load data.</strong><br>The FanGraphs proxy may be temporarily unavailable — try again in a moment.</div>
+    </div>
+
+    <div id="trip-content" style="display:none">
+      <div class="card">
+        <div class="player-heads-3">
+          <div class="player-head" id="trip-head-a"></div>
+          <div class="player-head" id="trip-head-b"></div>
+          <div class="player-head" id="trip-head-c"></div>
+        </div>
+        <div class="split-badge-wrap"><div class="split-badge"></div></div>
+        <div id="trip-stats-card"></div>
+      </div>
+      <div class="customize-footer">
+        <button class="btn" id="trip-customize-btn">Customize</button>
+        <button class="reset-link" id="trip-reset-btn">Reset to default</button>
+        <label class="highlight-toggle">
+          <input type="checkbox" id="trip-highlight-toggle" checked>
+          <span class="toggle-switch"></span>
+          <span>Highlight better</span>
+        </label>
+      </div>
+    </div>
+  </div>
 
   <!-- HITTER TAB -->
   <div id="tab-hitter" class="tab-panel active">
@@ -2158,10 +2225,28 @@ createTripleCompareTab({
   },
 });
 
+createTripleCompareTab({
+  statType: 'pit',
+  tabName: '3pitcher',
+  statGroups: STAT_GROUPS_PITCHING,
+  defaultKeys: DEFAULT_PITCHER_KEYS,
+  storageKey: 'player-compare:triplePitcherStats',
+  defaultNames: ['Paul Skenes', 'Tarik Skubal', 'Zack Wheeler'],
+  playerLetters: ['a', 'b', 'c'],
+  ids: {
+    inputs: ['trip-a-search', 'trip-b-search', 'trip-c-search'],
+    dropdowns: ['trip-a-dropdown', 'trip-b-dropdown', 'trip-c-dropdown'],
+    heads: ['trip-head-a', 'trip-head-b', 'trip-head-c'],
+    yearSelect: 'trip-year-select', splitSelect: 'trip-split-select',
+    customizeBtn: 'trip-customize-btn', resetBtn: 'trip-reset-btn', addBtn: 'trip-add-stat-btn', highlightToggle: 'trip-highlight-toggle',
+    statsCard: 'trip-stats-card', loading: 'trip-loading', error: 'trip-error', content: 'trip-content',
+  },
+});
+
 // ─── Tab switching ────────────────────────────────────────────────────────────
 const ACTIVE_TAB_KEY = 'player-compare:activeTab';
 
-const VALID_TABS = ['hitter', 'pitcher', '3hitter'];
+const VALID_TABS = ['hitter', 'pitcher', '3hitter', '3pitcher'];
 function activateTab(tab) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
